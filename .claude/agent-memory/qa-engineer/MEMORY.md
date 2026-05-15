@@ -1,0 +1,2 @@
+- [프로젝트 QA 검수 결과](project-qa-findings.md) — 2026-05-14 첫 검수, 14건(Critical 1/High 4/Medium 5/Low 4), 폼 핸들러 부재·미구현 링크·모바일 레이아웃 등 취약 패턴 기록
+- [테스트 프레임워크 현황](project-test-framework.md) — 테스트 프레임워크 미설치, Vitest + @testing-library/react 도입 권장
