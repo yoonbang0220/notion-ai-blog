@@ -18,10 +18,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "StarterKit",
-    template: "%s | StarterKit",
+    default: "AI 학습 블로그",
+    template: "%s | AI 학습 블로그",
   },
-  description: "Next.js 16 + shadcn/ui 기반 웹 개발 스타터킷",
+  description: "AI를 처음 공부하는 사람을 위한 실전 학습 노트. 초보가 쓴 초보 가이드.",
 }
 
 export default function RootLayout({
@@ -35,7 +35,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen flex flex-col antialiased">
+      <body className="flex min-h-screen flex-col antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -1,0 +1,4 @@
+- [Project identity](project_identity.md) — Notion CMS 기반 AI 학습 블로그 MVP, PRD SSOT는 docs/NOTION_BLOG_PRD.md
+- [Roadmap timeline conventions](roadmap_conventions.md) — 3주 파트타임(W1~W3), 태스크 ID `T<주차>.<번호>`, Size S/M/L/XL
+- [Tech traps to always cite](tech_traps.md) — Next.js 16 async params, cacheComponents+Suspense, @base-ui/react(not Radix), NOTION_TOKEN 서버 전용
+- [Testing requirements](testing_requirements.md) — 모든 태스크에 "테스트" 컬럼·시나리오 필수, UI 는 Playwright MCP, API/로직은 정상/실패/엣지 3종
