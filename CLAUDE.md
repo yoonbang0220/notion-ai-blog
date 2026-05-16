@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 이 저장소에서 Claude Code(claude.ai/code)가 작업할 때 따라야 할 지침이다.
 
 @AGENTS.md
@@ -12,13 +14,17 @@
 ## 명령어
 
 ```bash
-npm run dev      # 개발 서버 (Next.js 16 / Turbopack 기본)
-npm run build    # 프로덕션 빌드
-npm run start    # 프로덕션 서버
-npm run lint     # ESLint (package.json은 `eslint`만 — 인자 없이 전체 검사)
+npm run dev          # 개발 서버 (Next.js 16 / Turbopack 기본)
+npm run build        # 프로덕션 빌드
+npm run start        # 프로덕션 서버
+npm run lint         # ESLint (package.json은 `eslint`만 — 인자 없이 전체 검사)
+npm run test:notion  # Notion 페치 레이어 자기검증 (정상/401/404/빈결과 4종 시나리오)
+                     # 내부: node --env-file=.env.local --import tsx scripts/test/notion-client.ts
 npx prettier --write .            # 전체 포맷팅 (`format` npm 스크립트 없음 → npx 직접 호출)
 npx shadcn@latest add <component> # shadcn/ui 컴포넌트 추가
 ```
+
+`test:notion`은 실제 Notion API에 붙는다 — `.env.local`에 `NOTION_TOKEN` / `NOTION_DATABASE_ID`가 채워져 있어야 한다. 새 lib 단위 테스트 스크립트도 동일 패턴(`scripts/test/<name>.ts` + `tsx`)으로 추가한다.
 
 테스트 러너·pre-commit hook 모두 미설정. 대신 **UI/사용자 흐름 검증은 Playwright MCP**(`mcp__playwright__*`)로 수행한다 — 자세한 정책은 아래 "테스트 정책" 절 참고.
 
@@ -33,10 +39,12 @@ npx shadcn@latest add <component> # shadcn/ui 컴포넌트 추가
 **MVP 범위 (P0 — 빠지면 안 됨)**: 홈 / 글 목록 / 글 상세 / 카테고리 필터 / 태그 필터 / 클라이언트 사이드 검색 / Notion 페치 파이프라인 / on-demand revalidate webhook.
 **Future (지금 만들지 말 것)**: 댓글(Giscus), RSS/Atom, 시리즈/강의 그룹, 다국어, 뉴스레터, 조회수·좋아요(Vercel KV), OG 이미지 자동 생성, 서버사이드 검색(Algolia/Meilisearch). 우선순위·트리거 조건은 `docs/ROADMAP.md` 7절 참고.
 
-**진행 상태 / 일정** (PRD·ROADMAP 기준):
+**진행 상태 / 일정** (PRD·ROADMAP·Shrimp 기준):
 - 일정: 파트타임 3주 — W1 (2026-05-17~05-23) / W2 (~05-30) / W3 (~06-06).
-- 현재: 페이지 셸·타입·환경변수 템플릿·revalidate route는 완성. **`lib/notion.ts` 본문 구현이 다음 차례(W1 크리티컬 패스)**.
-- 크리티컬 패스: `T0.1 → T0.2 → T0.3 → T1.1 → T1.2 → T1.3 → T1.6 → T1.8 → T3.5 → T3.6 → T3.8 → T3.10`. 작업 전 ROADMAP에서 해당 태스크 ID 섹션을 확인할 것.
+- 완료: 사전 보강(server-only 가드 + `next.config.ts` images.remotePatterns), **T1.1 `queryPublishedPages` 헬퍼**(`databases.retrieve` → `dataSources.query` 2단계 패턴, 4종 시나리오 검증 통과).
+- 다음 차례(W1 크리티컬 패스): **T1.2/T1.5 `getPosts` 매핑 + Slug 중복 검증** → T1.4 (집계) → T1.3 (`getPostBySlug` + notion-to-md) → T1.6 (PostContent 마크다운 렌더러) → T1.7 → T1.8 → T1.9 → Phase 1 회귀.
+- 크리티컬 패스(전체): `T0.1 → T0.2 → T0.3 → T1.1 → T1.2 → T1.3 → T1.6 → T1.8 → T3.5 → T3.6 → T3.8 → T3.10`. 작업 전 ROADMAP에서 해당 태스크 ID 섹션을 확인할 것.
+- 태스크 트래킹: Shrimp Task Manager(`.shrimp/`)에 10개 Phase 1 태스크 등록됨. `list_tasks` / `execute_task` / `verify_task` 흐름으로 진행.
 
 ## 도메인 모델 (Notion DB)
 
@@ -80,6 +88,10 @@ Notion에 `Posts` Database 1개를 운영자가 직접 만든다. 속성 9종은
 - **sonner** — `<Toaster>`는 루트 레이아웃(`app/layout.tsx`)에 이미 포함됨. 페이지별 재선언 금지.
 - **lucide-react** — 아이콘.
 - **Notion CMS 파이프라인** — `@notionhq/client` + `notion-to-md` (페치/변환), `react-markdown` + `remark-gfm` + `rehype-highlight` (렌더링). 토큰은 서버 전용(`NOTION_TOKEN`/`NOTION_DATABASE_ID`). `NEXT_PUBLIC_` 절대 금지.
+  - ⚠️ **@notionhq/client v5 breaking change** — `notion.databases.query` 가 **제거됐다**. 대신 `databases.retrieve({database_id})` 로 응답의 `data_sources[0].id` 를 받아 `dataSources.query({data_source_id, filter, sorts, page_size, start_cursor})` 를 호출한다. `lib/notion.ts` 의 `resolveDataSourceId()` 가 이 변환을 모듈 로드 후 한 번만 수행해 캐시한다. v4 시절 코드·튜토리얼은 그대로 못 쓴다.
+  - ⚠️ **`databases.create` 의 `properties` 파라미터도 v5에서 무시된다** — DB 생성 후 `dataSources.update({data_source_id, properties: {...}})` 로 속성을 정의해야 한다. 기존 `Name`(title) 속성 rename은 `{Name: {name: "Title"}}` 패턴.
+- **`server-only` 가드** — `lib/notion.ts` 첫 줄 `import "server-only"` 필수. 클라이언트 컴포넌트에서 import 시 Turbopack 빌드가 즉시 실패한다. ⚠️ 가드 동작을 검증할 때 `app/__*` / `app/_*` 폴더는 Next.js private folder 규칙으로 라우트로 인식되지 않으니 검증용 페이지는 일반 폴더에 만들 것. 또한 순수 Node.js 환경(`tsx`/`node --import tsx`)에서는 `react-server` condition 이 없어 throw 하므로, `scripts/test/*.ts` 는 `lib/notion` 모듈을 직접 import 하지 말고 동일 로직을 인라인 복제(또는 v5 SDK 만 직접 사용)한다.
+- **next.config.ts `images.remotePatterns`** — Notion 이미지(`Cover` 등)는 `prod-files-secure.s3.us-west-2.amazonaws.com` / `s3.us-west-2.amazonaws.com` / `www.notion.so` 3종 호스트에서 서빙되며 `next.config.ts` 에 등록돼 있다. Notion 새 호스트 추가 시 같이 갱신.
 
 ## 아키텍처
 
@@ -98,8 +110,15 @@ components/
   common/             # 프로젝트 공통 (Header, Footer, ThemeProvider, ThemeToggle)
 lib/
   utils.ts            # cn() — clsx + tailwind-merge
-  notion.ts           # Notion CMS 페치 레이어 (서버 전용, 시그니처만 존재)
+  notion.ts           # Notion CMS 페치 레이어 (서버 전용)
+                      #   - server-only 가드 + requireEnv 헬퍼
+                      #   - Client + resolveDataSourceId() (databases.retrieve → data_sources[0].id 캐시)
+                      #   - queryPublishedPages() (Status=Published 필터 + start_cursor 페이지네이션)
+                      #   - getPosts / getPostBySlug / getCategories / getTags (W1 진행 중)
 types/index.ts        # 블로그 도메인 타입 (Post, PostSummary, Category, Tag, ThemeMode)
+scripts/
+  test/               # lib 단위·통합 테스트 (tsx 실행). 러너 미설정 — 자기검증 스크립트 패턴.
+    notion-client.ts  # T1.1 4종 시나리오 (정상/401/404/빈결과)
 ```
 
 > **폼 컴포넌트 분리 패턴** — 페이지 폼·복잡한 인터랙티브 블록은 `components/<feature>-form.tsx` 로 분리한다(예: 향후 검색바, 뉴스레터 등). `app/.../page.tsx` 는 얇은 서버 컴포넌트 래퍼로 유지.
@@ -111,7 +130,7 @@ RootLayout (ThemeProvider · Header · main · Footer · Toaster)
 
 단일 루트 레이아웃만 사용. 별도 그룹 레이아웃은 없다.
 
-**페이지 현황**: 구현 — `/`, `/posts`, `/posts/[slug]`, `/category/[slug]`, `/tag/[slug]`, `/about`, `not-found`. Route Handler — `/api/revalidate`. 모든 페이지는 빈 Notion 응답을 안전히 처리하도록 작성되어 있으며, 실제 콘텐츠는 `lib/notion.ts` 구현 후 자동 표시된다.
+**페이지 현황**: 구현 — `/`, `/posts`, `/posts/[slug]`, `/category/[slug]`, `/tag/[slug]`, `/about`, `not-found`. Route Handler — `/api/revalidate`. 모든 페이지는 빈 Notion 응답을 안전히 처리하도록 작성되어 있으며, `getPosts` / `getPostBySlug` / `getCategories` / `getTags` 가 완성되면 자동 표시된다(현재 W1 진행 중 — `queryPublishedPages` 만 완료, 매핑·집계는 다음 태스크).
 
 ## 주요 패턴
 
@@ -126,7 +145,7 @@ RootLayout (ThemeProvider · Header · main · Footer · Toaster)
 
 전통적 러너는 없지만 작업 유형별로 다음 검증을 **DoD의 일부로** 요구한다(상세는 `docs/ROADMAP.md` 5절 "🧪 테스트 전략" 참고).
 
-- **API 연동 / 비즈니스 로직** (`lib/notion.ts`, `app/api/*/route.ts`, 데이터 변환·권한·캐시 무효화) — 정상 흐름 + 실패/에러 경로(401·외부 API 에러·빈 응답·타임아웃) + 엣지 케이스(경계값·중복 slug 등) **최소 3종 시나리오** 명시.
+- **API 연동 / 비즈니스 로직** (`lib/notion.ts`, `app/api/*/route.ts`, 데이터 변환·권한·캐시 무효화) — 정상 흐름 + 실패/에러 경로(401·외부 API 에러·빈 응답·타임아웃) + 엣지 케이스(경계값·중복 slug 등) **최소 3종 시나리오** 명시. 위치는 `scripts/test/<name>.ts`, 실행은 `tsx`(devDep). `scripts/test/notion-client.ts` 가 레퍼런스 패턴 — 시나리오별 함수 + `=== 결과 요약 ===` 출력 + `process.exitCode`. `server-only` 모듈은 직접 import 금지(가드 throw).
 - **UI / 사용자 인터랙션 / 페이지 흐름** — **Playwright MCP**로 E2E 실측. 주요 호출:
   - `mcp__playwright__browser_navigate` — 페이지 이동
   - `mcp__playwright__browser_snapshot` — ARIA 트리 기반 상태 확인 (셀렉터보다 우선)
@@ -148,6 +167,8 @@ RootLayout (ThemeProvider · Header · main · Footer · Toaster)
 ## 환경 변수 & 경로
 
 - `.env.local`에 실제 값 (`.env.example` 참고). 클라이언트 노출 변수는 `NEXT_PUBLIC_` 접두사 필수.
+- **Notion 환경변수**: `NOTION_TOKEN`(Integration secret, `ntn_` 또는 `secret_` 접두) + `NOTION_DATABASE_ID`(Posts DB 32자 hex). 두 값이 없으면 `lib/notion.ts` 모듈 로드 시점에 `requireEnv` 가 throw → 빌드·dev 부팅 즉시 실패. 토큰 발급 후 Posts DB 페이지 우상단 `···` → `연결`(Connections) 메뉴에서 Integration 을 **명시적으로 connect** 해야 한다(Integration 자체 권한 부여는 API 로 불가능).
+- 새 Notion DB는 API 로 자동 생성 가능 — 부모 페이지에 Integration 만 연결돼 있으면 `databases.create` + `dataSources.update` 2회 호출로 9속성 스키마 정의. (위 "함정 노트" 의 v5 트랩 참고)
 - 경로 alias: `@/*` → 프로젝트 루트 (`tsconfig.json`).
 
 ## 프로젝트 컨텍스트 문서
@@ -179,7 +200,7 @@ RootLayout (ThemeProvider · Header · main · Footer · Toaster)
   - `sequential-thinking` — 단계적 사고.
   - `playwright` — 브라우저 자동화. **테스트 정책의 E2E 검증 기본 도구**.
   - `shadcn` — shadcn/ui 레지스트리 검색·추가.
-  - `task-master-ai` — 태스크 분해·추적.
+  - `shrimp-task-manager` — Shrimp 기반 태스크 분해·실행·검증 체인. 로컬 빌드(`E:/claude/mcp-shrimp-task-manager/dist/index.js`), `DATA_DIR=.shrimp/`(gitignored).
 - `docs/HOOKS_PLANNING.md` — Slack 알림 시스템 설계·이슈·로드맵 기획서. **Slack/Hook 관련 변경 시 반드시 참조**.
 - `hook-test.txt` (저장소 루트) — Bash PreToolUse 훅이 append하는 로그. 수동 편집 금지.
 
