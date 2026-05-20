@@ -50,3 +50,6 @@ hook-test.txt
 # Shrimp Task Manager 데이터 저장소 (개인 태스크 진행 상태)
 .shrimp/
 docs/archive/shrimp-backup/
+
+# Playwright MCP 임시 산출물 (콘솔 로그·페이지 스냅샷 등 검증 부산물)
+.playwright-mcp/

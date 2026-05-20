@@ -4,10 +4,12 @@
 import { cacheLife, cacheTag } from "next/cache"
 import { notFound } from "next/navigation"
 
+import { QuoteView } from "@/components/quote-view"
 import {
   calculateTotals,
   getQuoteBySlug,
   getQuoteItems,
+  isQuoteExpired,
 } from "@/lib/quotes"
 
 /**
@@ -29,9 +31,7 @@ import {
  *   2. `getQuoteItems` — 항목 N건 + warning(0건/잘림).
  *   3. `calculateTotals` — 소계/부가세/총합계(코드 계산, SSOT).
  *
- * ⚠️ 현재는 T1.6 의 `<QuoteView>` 가 아직 없어 **최소 임시 뷰**로 데이터를 출력한다.
- *    목적은 디자인이 아니라 "데이터가 화면 끝까지 흐르는지" 확인. 디자인·반응형·
- *    만료 배너(`isExpired`, T1.7)는 후속 태스크. 추후 `<QuoteView>` 로 교체한다.
+ * 렌더는 T1.6 의 {@link QuoteView}(서버 컴포넌트, 표시 전용)에 위임한다.
  */
 export async function QuoteData({ slug }: { slug: string }) {
   "use cache"
@@ -44,89 +44,17 @@ export async function QuoteData({ slug }: { slug: string }) {
   const { items, warning } = await getQuoteItems(quote.pageId)
   const totals = calculateTotals(items, quote.taxRate)
 
-  // ─── 임시 뷰(T1.6 에서 components/quote-view.tsx 로 교체) ───
-  const won = new Intl.NumberFormat("ko-KR")
-  const formatWon = (value: number) => `${won.format(value)}원`
+  // 만료 판정(정합성 규칙 7). validUntil=null 시 console.warn 1회 + false 는
+  // isQuoteExpired 헬퍼 내부에서 처리한다(T1.7).
+  const isExpired = isQuoteExpired(quote)
 
   return (
-    <article className="space-y-8">
-      {/* 헤더 — 발행처/고객사/메타 */}
-      <header className="space-y-1">
-        {quote.title && (
-          <h1 className="text-2xl font-bold">{quote.title}</h1>
-        )}
-        <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-          <dt>발행사</dt>
-          <dd className="text-foreground">{quote.issuerCompany ?? "-"}</dd>
-          <dt>고객사</dt>
-          <dd className="text-foreground">{quote.clientCompany ?? "-"}</dd>
-          <dt>견적번호</dt>
-          <dd className="text-foreground">{quote.quoteNumber ?? "-"}</dd>
-          <dt>발행일</dt>
-          <dd className="text-foreground">{quote.issuedAt ?? "-"}</dd>
-          <dt>유효기간</dt>
-          <dd className="text-foreground">{quote.validUntil ?? "-"}</dd>
-        </dl>
-      </header>
-
-      {/* 항목 페치 경고(0건/잘림) — 규칙 4. T1.6 에서 정식 배너로. */}
-      {warning && (
-        <p className="border-destructive/50 text-destructive rounded border px-3 py-2 text-sm">
-          {warning}
-        </p>
-      )}
-
-      {/* 항목 표 */}
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b text-left">
-            <th className="py-2 pr-2 font-medium">항목명</th>
-            <th className="py-2 px-2 text-right font-medium">수량</th>
-            <th className="py-2 px-2 text-right font-medium">단가</th>
-            <th className="py-2 pl-2 text-right font-medium">금액</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, index) => (
-            <tr key={`${item.name}-${index}`} className="border-b">
-              <td className="py-2 pr-2">{item.name}</td>
-              <td className="py-2 px-2 text-right">{won.format(item.quantity)}</td>
-              <td className="py-2 px-2 text-right">{formatWon(item.unitPrice)}</td>
-              <td className="py-2 pl-2 text-right">{formatWon(item.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* 합계 — 소계/부가세/총합계 */}
-      <div className="ml-auto w-full max-w-xs space-y-1 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">소계</span>
-          <span>{formatWon(totals.subtotal)}</span>
-        </div>
-        {quote.taxRate > 0 && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              부가세 ({quote.taxRate}%)
-            </span>
-            <span>{formatWon(totals.tax)}</span>
-          </div>
-        )}
-        <div className="flex justify-between border-t pt-1 text-base font-bold">
-          <span>총합계</span>
-          <span>{formatWon(totals.total)}</span>
-        </div>
-      </div>
-
-      {/* 비고 */}
-      {quote.notes && (
-        <section className="text-sm">
-          <h2 className="mb-1 font-medium">비고</h2>
-          <p className="text-muted-foreground whitespace-pre-line">
-            {quote.notes}
-          </p>
-        </section>
-      )}
-    </article>
+    <QuoteView
+      quote={quote}
+      items={items}
+      totals={totals}
+      itemsWarning={warning}
+      isExpired={isExpired}
+    />
   )
 }

@@ -57,7 +57,7 @@
 
 ### 작업 항목
 
-#### T1.1 — Notion `Quotes` DB 스키마 정의 및 시드 1건 입력
+#### ✅ T1.1 — Notion `Quotes` DB 스키마 정의 및 시드 1건 입력
 
 - **추정**: M (0.5~1d) · **담당 영역**: data / ops · **테스트**: 수동 체크리스트
 - **세부 단계**:
@@ -78,7 +78,7 @@
     2. `.env.local` 의 `NOTION_TOKEN` 이 `ntn_` 또는 `secret_` 접두, `NOTION_DATABASE_ID` 가 32자 hex.
 - **함정·메모**: ⚠️ Integration connect 는 API 로 자동화 불가능 — 운영자가 Notion UI 에서 직접 수행해야 함. 누락 시 모든 페치가 `ObjectNotFound` 로 실패.
 
-#### T1.2 — `lib/quotes.ts` 페치 레이어 (`getQuoteBySlug`)
+#### ✅ T1.2 — `lib/quotes.ts` 페치 레이어 (`getQuoteBySlug`)
 
 - **추정**: L (1~2d) · **담당 영역**: data · **테스트**: 단위 + 통합 (`scripts/test/quotes-client.ts`)
 - **세부 단계**:
@@ -112,7 +112,7 @@
   - ⚠️ `NOTION_TOKEN` 서버 전용. `NEXT_PUBLIC_` 절대 금지.
   - ⚠️ Notion `rich_text` 는 배열 → `.map(t => t.plain_text).join("")` 패턴.
 
-#### T1.3 — 항목 표 파싱 + 합계 계산 (`getQuoteItems`)
+#### ✅ T1.3 — 항목 표 파싱 + 합계 계산 (`getQuoteItems`)
 
 - **추정**: M (0.5~1d) · **담당 영역**: data / 비즈니스 로직 · **테스트**: 단위 (`scripts/test/quotes-items.ts`)
 - **세부 단계**:
@@ -141,7 +141,7 @@
   - Notion table 블록은 `has_children=true` 이며 `children` 로 한 번 더 페치해야 row 들을 얻을 수 있다.
   - 셀 내용은 `cells: rich_text[][]` 이중 배열 — `cells[colIdx].map(t => t.plain_text).join("")` 으로 평탄화.
 
-#### T1.4 — 견적서 도메인 타입 + 정규화 헬퍼
+#### ✅ T1.4 — 견적서 도메인 타입 + 정규화 헬퍼
 
 - **추정**: S (<2h) · **담당 영역**: data · **테스트**: 단위 (T1.2/T1.3 에 통합)
 - **세부 단계**:
@@ -153,7 +153,7 @@
 - **테스트 계획**: T1.2 시나리오 1에서 모든 필드 not-null 검증으로 흡수. 별도 스크립트 불필요.
 - **함정·메모**: 타입은 `@notionhq/client/build/src/api-endpoints` 의 `PageObjectResponse` 와 호환되도록 작성.
 
-#### T1.5 — `/q/[slug]` 페이지 셸 + Suspense 데이터 컴포넌트
+#### ✅ T1.5 — `/q/[slug]` 페이지 셸 + Suspense 데이터 컴포넌트
 
 - **추정**: M (0.5~1d) · **담당 영역**: ui · **테스트**: 빌드 + 수동 + Playwright E2E (T2.6 에서 본격 검증)
 - **세부 단계**:
@@ -176,7 +176,7 @@
   - ⚠️ `"use cache"` + `cacheLife("minutes")` 사용. `export const revalidate = N` 금지.
   - ⚠️ 응답 헤더 강제는 Next.js 16 권장 패턴 확인 필요 (Route Handler + Middleware vs Page response). Middleware 가 가장 안정적.
 
-#### T1.6 — `<QuoteView>` 컴포넌트 (데스크톱 + 모바일 반응형)
+#### ✅ T1.6 — `<QuoteView>` 컴포넌트 (데스크톱 + 모바일 반응형)
 
 - **추정**: L (1~2d) · **담당 영역**: ui · **테스트**: 수동 + Playwright (T2.6)
 - **세부 단계**:
@@ -206,7 +206,7 @@
   - shadcn/ui = `@base-ui/react` (Radix 아님). 표 컴포넌트는 자체 `<table>` 직접 사용 가능 (shadcn `table` 별도 추가 필요 시 `mcp__shadcn__get_add_command_for_items` 활용).
   - 한글 폰트는 W2 의 PDF 폰트 임베드와 동일하게 Pretendard 사용 → T2.3 에서 결정 후 본 컴포넌트도 동일 폰트 적용.
 
-#### T1.7 — 만료 견적 배너 + `isExpired` 판정 로직
+#### ✅ T1.7 — 만료 견적 배너 + `isExpired` 판정 로직
 
 - **추정**: S (<2h) · **담당 영역**: data + ui · **테스트**: 단위 (T1.2 에 통합) + Playwright (T2.6)
 - **세부 단계**:
@@ -225,15 +225,15 @@
 
 ### Phase 1 완료 정의 (DoD)
 
-- [ ] T1.1~T1.7 모든 작업 항목 인수 조건 통과.
-- [ ] `npm run build` 통과 (Cache Components 게이트).
-- [ ] `npm run lint` 무경고.
-- [ ] `npm run test:quotes` (신규 스크립트) 모든 시나리오 통과 → `=== 결과 요약 ===` 에 fail 0.
-- [ ] 정상 시드 견적이 `/q/<slug>` 에서 데스크톱·모바일·다크모드 3종 viewport 에서 렌더 (수동 검수).
-- [ ] 만료 시드 견적에서 배너 노출.
-- [ ] 잘못된 슬러그 → 404.
-- [ ] 코드 리뷰 통과 (`code-reviewer-kr` 서브에이전트).
-- [ ] **정의된 테스트 시나리오가 모두 통과** (단위 스크립트 + 수동 viewport 검수).
+- [x] T1.1~T1.7 모든 작업 항목 인수 조건 통과. *(2026-05-21: T1.7 `isQuoteExpired` 구현, `test:quotes` 10/10)*
+- [x] `npm run build` 통과 (Cache Components 게이트). *(2026-05-21: `/q/[slug]` Partial Prerender)*
+- [x] `npm run lint` 무경고.
+- [x] `npm run test:quotes` (신규 스크립트) 모든 시나리오 통과 → `=== 결과 요약 ===` 에 fail 0. *(7/7)*
+- [x] 정상 시드 견적이 `/q/<slug>` 에서 데스크톱·모바일·다크모드 3종 viewport 에서 렌더 (수동 검수). *(Playwright 실측 + 수동 확인)*
+- [x] 만료 시드 견적에서 배너 노출. *(만료 시드 빨간 배너 Playwright 확인)*
+- [x] 잘못된 슬러그 → 404.
+- [ ] 코드 리뷰 통과 (`code-reviewer-kr` 서브에이전트). *(미실행 — 잔여)*
+- [ ] **정의된 테스트 시나리오가 모두 통과** (단위 스크립트 + 수동 viewport 검수). *(T1.7 단위 시나리오·코드리뷰 잔여)*
 
 ### Phase 1 리스크
 
@@ -624,3 +624,5 @@ T2.7 (Vercel 배포)
 | 일자 | 변경 | 작성자 |
 |------|------|-------|
 | 2026-05-17 | 견적서 도메인 기준 신규 작성 (블로그 로드맵은 `docs/archive/ROADMAP.md` 로 이동) | prd-roadmap-architect |
+| 2026-05-21 | T1.1~T1.6 완료 검증·체크 (산출물 8종 존재·`test:quotes` 7/7·build `/q/[slug]` Partial Prerender). T1.7(`isQuoteExpired`)·코드리뷰 잔여 | /git:docs:update-roadmap |
+| 2026-05-21 | T1.7 완료 (`isQuoteExpired` 헬퍼 + `quote-data.tsx` 배선 + 만료 단위 3종). `test:quotes` 10/10·build 통과. Phase 1 잔여=code-reviewer-kr 리뷰 | quote-viewer-builder |

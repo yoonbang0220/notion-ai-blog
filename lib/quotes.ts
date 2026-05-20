@@ -149,8 +149,13 @@ function normalizeQuote(page: PageObjectResponse): Quote {
   const title = getTitleText(p[PROP.title])
   const slug = getFormulaString(p[PROP.slug])
   const rawStatus = getSelect(p[PROP.status]) // "발행" 기대(필터가 보장)
-  const status: QuoteStatus =
-    rawStatus && STATUS[rawStatus] ? STATUS[rawStatus] : "Published"
+  // 매핑에 없는 상태값(운영자 오타 옵션 등)은 조용히 넘기지 않고 경고를 남긴다(M5).
+  // 정상 흐름에선 필터(상태=발행)가 보장하므로 도달하지 않는다.
+  const mappedStatus = rawStatus ? STATUS[rawStatus] : undefined
+  if (rawStatus && !mappedStatus) {
+    console.warn(`[quote ${page.id}] 알 수 없는 상태값: ${rawStatus} → Published 처리`)
+  }
+  const status: QuoteStatus = mappedStatus ?? "Published"
   const clientCompany = getRichText(p[PROP.clientCompany])
   const issuerCompany = getRichText(p[PROP.issuerCompany])
   const quoteNumber = getRichText(p[PROP.quoteNumber])
@@ -286,6 +291,27 @@ export function calculateTotals(
   const tax = Math.round((subtotal * taxRate) / 100)
   const total = subtotal + tax
   return { subtotal, tax, total }
+}
+
+/**
+ * 견적 만료 여부 판정(정합성 규칙 7). **순수 함수**(Notion 호출 없음).
+ *
+ * - `validUntil` 이 있고 `< now` 면 `true`(만료) → 상단 만료 배너 노출(열람은 허용).
+ *   410 차단은 Future(Phase 3).
+ * - `validUntil` 이 `null` 이면 `false`(배너 미노출) + `console.warn` 1회.
+ *   유효기간 미입력은 비정상 데이터 신호이므로 견적 식별자({@link Quote.pageId})를
+ *   포함해 경고만 남기고 페이지 노출은 막지 않는다.
+ *
+ * @param quote 정규화된 {@link Quote}.
+ * @param now 기준 시각(테스트 주입용, 기본 현재 시각).
+ * @returns 만료면 `true`, 유효·미입력이면 `false`.
+ */
+export function isQuoteExpired(quote: Quote, now: Date = new Date()): boolean {
+  if (!quote.validUntil) {
+    console.warn(`[quote ${quote.pageId}] 유효기간(validUntil) 누락 → 만료 미판정`)
+    return false
+  }
+  return new Date(quote.validUntil) < now
 }
 
 // ──────── Notion 속성 값 추출 헬퍼 (없거나 타입 불일치 시 null) ────────

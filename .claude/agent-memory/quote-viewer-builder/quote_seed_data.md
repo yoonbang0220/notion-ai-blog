@@ -16,7 +16,10 @@ Notion 회귀 시드(`[regression-seed-*]` 접두) 실측값. `scripts/test/quot
 
 **expired 시드** (`SEED_SLUG_EXPIRED`):
 - 제목 `[regression-seed-expired] XYZ 만료 견적`, 고객사 XYZ 주식회사, 유효기간 2024-01-31(만료)
-- 항목 1건: 컨설팅 (만료) (1 × 500000)
+- 슬러그 `36378466f72781f09b60c3ccdd1ca592`
+- 항목 1건: 컨설팅 (만료) (1 × 500000) → subtotal 500,000 / 부가세 10% 50,000 / total 550,000
+- 만료 배너 ARIA: `alert` "유효기간이 만료되었습니다." (T1.7 Playwright 실측 2026-05-21).
+  active 시드(유효기간 2027-12-31)에는 이 alert 없음.
 
 **How to apply:** relation 필터(`견적 contains invoiceId`)가 견적별로 항목을 정확히
 분리함을 실측 — active 2건/expired 1건 교차 누출 없음. T1.5+ 만료 배너 검증은 expired 시드 사용.

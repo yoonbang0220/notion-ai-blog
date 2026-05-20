@@ -28,7 +28,9 @@
  *   4. 빈 결과: 존재하지 않는 slug → getQuoteBySlug 동치 로직이 null
  *   5. 엣지(slug 형식): "too-short" → Notion 호출 없이 null(정규식)
  *   6. 엣지(부가세 0%): calculateTotals(items, 0) → tax=0, total=subtotal
- *   추가) 합계 순수 로직: 반올림 경계값(1234567 × 10% → 123457) 동치 검증(시드 무관)
+ *   7. 합계 순수 로직: 반올림 경계값(1234567 × 10% → 123457) 동치 검증(시드 무관)
+ *   8~10. 만료 판정(T1.7, isQuoteExpired 순수 함수): 유효(미래→false)/만료(과거→true)/
+ *         null(false + console.warn 1회). 시드 무관.
  */
 
 import {
@@ -61,6 +63,7 @@ const PROP = {
   slug: "슬러그",
   clientCompany: "고객사",
   issuerCompany: "발행사",
+  taxRate: "부가세율",
 } as const
 const ITEM_PROP = {
   name: "항목명",
@@ -113,10 +116,10 @@ async function resolveDataSource(
 }
 
 /**
- * getQuoteBySlug 동치(폴백 버전).
+ * getQuoteBySlug 동치(lib/quotes.ts 와 완전 동일한 폴백 로직 복제).
  *
- * lib 코드는 `슬러그` formula 필터를 쓰지만, 실 API 에서 validation_error 가 발생한다
- * (상단 주석 참조). 본 검증에서는 "상태=발행 필터 + 코드 측 슬러그 비교" 폴백을 쓴다.
+ * lib·본 스크립트 모두 "상태=발행 필터 + 코드 측 슬러그 비교 + 페이지네이션 + 중복 throw"
+ * 폴백을 쓴다(슬러그 formula 서버필터 불가 — 상단 주석 참조).
  * 형식 위반 slug → Notion 호출 없이 null(규칙 3), 2건 이상 → throw(규칙 1).
  */
 async function getQuoteBySlugEquiv(
@@ -199,6 +202,24 @@ function calculateTotalsEquiv(items: QuoteItem[], taxRate: number): QuoteTotals 
   return { subtotal, tax, total: subtotal + tax }
 }
 
+/**
+ * isQuoteExpired 동치(lib/quotes.ts 와 동일 로직, T1.7).
+ *
+ * 순수 함수라 시드 무관. validUntil 미래 → false, 과거 → true,
+ * null → false + console.warn 1회(견적 식별자 포함).
+ * 시나리오에서 식별자(pageId)만 쓰므로 최소 형태(`{ pageId, validUntil }`)로 받는다.
+ */
+function isQuoteExpiredEquiv(
+  quote: { pageId: string; validUntil: string | null },
+  now: Date = new Date(),
+): boolean {
+  if (!quote.validUntil) {
+    console.warn(`[quote ${quote.pageId}] 유효기간(validUntil) 누락 → 만료 미판정`)
+    return false
+  }
+  return new Date(quote.validUntil) < now
+}
+
 // ──────── 시나리오 ────────
 
 /** 시드 페치 결과를 시나리오 1/2/6 가 공유(중복 페치 방지). */
@@ -234,7 +255,7 @@ async function loadSeed(): Promise<SeedFetch | null> {
   const quote = await getQuoteBySlugEquiv(client, invoiceDb, seedSlug)
   if (!quote) throw new Error(`시드 slug 페치 실패(0건): ${seedSlug}`)
   const { items, warning } = await getQuoteItemsEquiv(client, itemsDb, quote.id)
-  const taxRate = getNumber(quote.properties["부가세율"]) ?? 10
+  const taxRate = getNumber(quote.properties[PROP.taxRate]) ?? 10
   seedCache = { quote, items, itemsWarning: warning, taxRate }
   return seedCache
 }
@@ -412,6 +433,58 @@ function scenario7RoundingBoundary(): ScenarioResult {
   }
 }
 
+/** 시나리오 8: 만료 판정(유효) — validUntil 미래 → false. */
+function scenario8ExpiredFuture(): ScenarioResult {
+  const name = "8. 만료 판정: 유효(validUntil 미래 → false)"
+  const future = new Date("2999-12-31T00:00:00Z").toISOString()
+  const result = isQuoteExpiredEquiv({ pageId: "test-active", validUntil: future })
+  return {
+    name,
+    ok: result === false,
+    detail: `validUntil=${future.slice(0, 10)} → isExpired=${result}`,
+  }
+}
+
+/** 시나리오 9: 만료 판정(만료) — validUntil 과거 → true. */
+function scenario9ExpiredPast(): ScenarioResult {
+  const name = "9. 만료 판정: 만료(validUntil 과거 → true)"
+  const past = new Date("2000-01-01T00:00:00Z").toISOString()
+  const result = isQuoteExpiredEquiv({ pageId: "test-expired", validUntil: past })
+  return {
+    name,
+    ok: result === true,
+    detail: `validUntil=${past.slice(0, 10)} → isExpired=${result}`,
+  }
+}
+
+/**
+ * 시나리오 10: 만료 판정(null) — validUntil=null → false + console.warn 1회.
+ *
+ * console.warn 을 일시적으로 가로채 호출 횟수만 카운트한다(출력은 억제해 요약을
+ * 깔끔히 유지). throw 가 없어야 하며 결과는 false 여야 한다.
+ */
+function scenario10ExpiredNull(): ScenarioResult {
+  const name = "10. 만료 판정: null(false + warn 1회)"
+  const originalWarn = console.warn
+  let warnCount = 0
+  console.warn = () => {
+    warnCount += 1
+  }
+  try {
+    const result = isQuoteExpiredEquiv({ pageId: "test-null", validUntil: null })
+    const ok = result === false && warnCount === 1
+    return {
+      name,
+      ok,
+      detail: `isExpired=${result}, console.warn 호출=${warnCount}회`,
+    }
+  } catch (e) {
+    return { name, ok: false, detail: `throw 발생(예상과 다름): ${errorMessage(e)}` }
+  } finally {
+    console.warn = originalWarn
+  }
+}
+
 function errorMessage(e: unknown): string {
   if (APIResponseError.isAPIResponseError(e)) return `${e.code}: ${e.message}`
   if (e instanceof Error) return `${e.name}: ${e.message}`
@@ -427,6 +500,9 @@ async function run() {
   results.push(await scenario5SlugFormat())
   results.push(await scenario6ZeroTax())
   results.push(scenario7RoundingBoundary())
+  results.push(scenario8ExpiredFuture())
+  results.push(scenario9ExpiredPast())
+  results.push(scenario10ExpiredNull())
 
   console.log("\n=== 결과 요약 ===")
   for (const r of results) {

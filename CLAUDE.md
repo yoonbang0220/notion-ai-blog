@@ -49,8 +49,8 @@ npx shadcn@latest add <component> # shadcn/ui 컴포넌트 추가
 **진행 상태 / 일정** (PRD 기준, 상세 분해는 `docs/ROADMAP.md`):
 - 일정: 파트타임 2주 — W1 / W2. 태스크 ID 컨벤션 `T1.x` / `T2.x`.
 - **W0 (초기화) 완료** — 블로그 도메인 자산 제거, 견적서 도메인 기반 정돈.
-- **W1 진행 중** — ✅ T1.1(Notion Invoice/Items DB 시드·`.env.local`) / ✅ T1.2(`getQuoteBySlug`, 슬러그 formula 서버필터 불가 → 폴백 적용) / ✅ T1.3(`getQuoteItems`+`calculateTotals`) / ✅ T1.4(도메인 타입) / ✅ T1.5(`/q/[slug]` 셸+Suspense+noindex). `npm run test:quotes` 7/7, `npm run build` 통과.
-- **다음 차례(T1.6)**: `components/quote-view.tsx` — 데스크톱+모바일 반응형 디자인으로 `quote-data.tsx` 의 임시 뷰 교체. 이어 T1.7(만료 배너 + `isQuoteExpired`).
+- **W1 완료** — ✅ T1.1~T1.7 (Notion 시드 → `getQuoteBySlug`/`getQuoteItems`/`calculateTotals` → 도메인 타입 → `/q/[slug]` 셸+Suspense+noindex → `<QuoteView>` 반응형 → `isQuoteExpired` 만료 판정). `npm run test:quotes` 10/10, `npm run build`(`/q/[slug]` Partial Prerender) 통과. **Phase 1 잔여: code-reviewer-kr 코드 리뷰.**
+- **다음 차례**: W2(T2.x). 크리티컬 패스 = T2.1(puppeteer/chromium 설치) → T2.3(PDF 라우트). T2.2(폰트)·T2.4(revalidate)·T2.5(robots)는 병행 가능.
 - 크리티컬 패스: `lib/quotes.ts → app/q/[slug]/page.tsx → app/q/[slug]/pdf/route.ts → app/api/revalidate/route.ts → robots/noindex → Playwright E2E`. (현재 `app/q/[slug]/page.tsx` 까지 완료, 다음은 PDF·revalidate 가 있는 W2.)
 - 작업 착수 전 `docs/ROADMAP.md` 해당 태스크 ID 섹션을 우선 확인할 것 (DoD·테스트 계획·의존성·리스크 포함).
 
