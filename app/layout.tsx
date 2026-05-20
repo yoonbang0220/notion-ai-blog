@@ -18,10 +18,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "AI 학습 블로그",
-    template: "%s | AI 학습 블로그",
+    default: "Quote Viewer",
+    template: "%s | Quote Viewer",
   },
-  description: "AI를 처음 공부하는 사람을 위한 실전 학습 노트. 초보가 쓴 초보 가이드.",
+  description: "Notion 기반 견적서 웹뷰어 + PDF 다운로드.",
 }
 
 export default function RootLayout({

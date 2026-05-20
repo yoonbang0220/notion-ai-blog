@@ -1,4 +1,4 @@
-- [Project identity](project_identity.md) — Notion CMS 기반 AI 학습 블로그 MVP, PRD SSOT는 docs/NOTION_BLOG_PRD.md
-- [Roadmap timeline conventions](roadmap_conventions.md) — 3주 파트타임(W1~W3), 태스크 ID `T<주차>.<번호>`, Size S/M/L/XL
-- [Tech traps to always cite](tech_traps.md) — Next.js 16 async params, cacheComponents+Suspense, @base-ui/react(not Radix), NOTION_TOKEN 서버 전용
-- [Testing requirements](testing_requirements.md) — 모든 태스크에 "테스트" 컬럼·시나리오 필수, UI 는 Playwright MCP, API/로직은 정상/실패/엣지 3종
+- [Project identity](project_identity.md) — Notion 기반 견적서 웹뷰어 + PDF MVP, PRD SSOT는 docs/QUOTE_VIEWER_PRD.md, 이전 블로그 도메인은 docs/archive/
+- [Roadmap timeline conventions](roadmap_conventions.md) — 2주 파트타임(W1~W2), W0 완료, 태스크 ID `T<주차>.<번호>`, Size S/M/L/XL, 담당 영역에 pdf/seo 추가
+- [Tech traps to always cite](tech_traps.md) — Next.js 16 async params, cacheComponents+Suspense, @base-ui/react, NOTION_TOKEN 서버 전용, Notion v5 2단계 패턴, PDF는 puppeteer-core+@sparticuz/chromium만(풀 puppeteer 금지)
+- [Testing requirements](testing_requirements.md) — 정상/실패/엣지 3종 의무, UI는 Playwright MCP, 견적서 시드 2건(active/expired) 유지, PDF는 browser_network_request로 헤더 검증

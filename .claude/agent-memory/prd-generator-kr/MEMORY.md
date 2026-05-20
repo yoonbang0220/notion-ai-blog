@@ -1,0 +1,5 @@
+- [User role](user_role.md) — berdanis4는 PRD를 받아 본인이 직접 구현하는 1인 운영자. 외부 발주용 아닌 구현용 PRD 필요.
+- [Project repo context](project_repo_context.md) — 이 저장소는 Notion CMS + Next.js 16 MVP들의 인큐베이터. 신규 PRD는 기존 인프라(lib/notion.ts·v5 SDK 함정·shadcn base-nova)를 상속 전제.
+- [Notion data model pattern](feedback_notion_data_model_pattern.md) — DB 1개 + page body 블록이 디폴트. child DB 분리는 거의 항상 Future.
+- [URL security MVP minimum](heuristic_url_security_mvp.md) — 비로그인 공유 링크는 추측 불가 slug(32자+) + noindex + server-only 토큰이 P0 최소선. 비밀번호·만료차단은 Future.
+- [PDF generation decision](heuristic_pdf_generation_decision.md) — 한글 결재용 PDF는 @sparticuz/chromium이 디폴트. window.print()는 다운그레이드 옵션, @react-pdf/renderer는 표·폰트 코스트 큼.

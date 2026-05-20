@@ -49,3 +49,4 @@ hook-test.txt
 
 # Shrimp Task Manager 데이터 저장소 (개인 태스크 진행 상태)
 .shrimp/
+docs/archive/shrimp-backup/

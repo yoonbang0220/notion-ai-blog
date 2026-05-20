@@ -1,442 +1,626 @@
-# ROADMAP — Notion CMS 기반 AI 학습 블로그 MVP
+# ROADMAP — 노션 기반 견적서 웹뷰어 + PDF 다운로드 MVP
 
-> 최종 업데이트: 2026-05-17
-> 기반 문서: [`docs/NOTION_BLOG_PRD.md`](./NOTION_BLOG_PRD.md) (작성일 2026-05-16)
-> 작성자: prd-roadmap-architect
+> 최종 업데이트: 2026-05-17 | 기반 문서: `docs/QUOTE_VIEWER_PRD.md`
+> 도메인: 견적서 뷰어 (이전 블로그 도메인은 `docs/archive/` 에 보존)
 
----
+## 📌 요약
 
-## 1. 개요
+- **비전 한 줄**: 운영자는 Notion에 한 번 쓰고, 클라이언트는 링크 한 번에 열람하고 PDF 한 번에 결재 올린다.
+- **목표 출시 시점**: W2 종료 시점(파트타임 2주). PRD 일정 표 기준 W1+W2 완료 직후 데모 링크 공유 가능.
+- **핵심 KPI**:
+  - 운영자: 견적 1건 발행 → 공유 URL 전달까지 **5분 이내**.
+  - 클라이언트: URL 클릭 → 견적서 첫 페인트 **3초 이내(3G 모바일 기준)**, PDF 다운로드 클릭 → 파일 수신 **10초 이내(콜드스타트 포함)**.
+  - 정합성: 동일 URL의 견적 수정 → **60초 이내 반영(webhook 시) / 5분 이내 반영(자연 캐시 만료 시)**.
 
-### 1.1 프로젝트 정체성
-- **무엇**: 운영자가 Notion DB에서 작성한 글을 ISR 60초로 자동 퍼블리싱하는 AI 학습 블로그.
-- **누가**: AI 입문자(비개발자 포함). 1차 페르소나는 28세 마케터 "김지원".
-- **왜**: "초보가 쓴 초보 가이드" 톤으로 진입장벽을 낮춰, 입문자가 한 편이라도 끝까지 읽고 "나도 따라할 수 있겠다"는 자신감을 얻게 한다.
-- **무엇을 만드는가(MVP)**: 홈 / 글 목록 / 글 상세 / 카테고리·태그 필터 / 클라이언트 검색 / Notion 파이프라인 / on-demand revalidate webhook.
+## 🎯 전체 단계 개요
 
-### 1.2 전제·제약
-- **개발 자원**: 파트타임 3주 (W1 ~ W3, 시작 기준 2026-05-17).
-- **단일 출처(SSOT)**: PRD `docs/NOTION_BLOG_PRD.md`. 기능·우선순위 변경은 PRD를 먼저 갱신한다.
-- **검색 범위 가정**: 글 100개 이하 → 클라이언트 사이드 키워드 매칭. 초과 시 Future Work(Algolia/Meilisearch)로 분리.
-- **호스팅**: Vercel (ISR + Edge), 도메인 W3에서 결정.
-- **기술 함정 (반드시 준수)**
-  - Next.js 16.2.6: `params` / `searchParams` 는 `Promise` 타입 → **반드시 `await`**.
-  - `cacheComponents: true` 활성 → 동적 라우트의 데이터 페치 컴포넌트는 **`<Suspense>` 안에 배치 필수** (현재 `app/posts/[slug]/page.tsx` 패턴이 표준).
-  - ISR은 `"use cache"` + `cacheLife("minutes")` 패턴. **`export const revalidate = N` 사용 금지**.
-  - shadcn/ui는 `@base-ui/react` 기반(Radix 아님) → props·API는 항상 실제 컴포넌트 파일에서 확인.
-  - `NOTION_TOKEN` / `NOTION_DATABASE_ID` 는 **서버 전용**. `NEXT_PUBLIC_` 접두사 절대 금지.
-  - `lib/notion.ts` 는 클라이언트 컴포넌트에서 import 금지(`server-only` 가드 추가 권장).
+| Phase | 목표 | 기간(추정) | 핵심 산출물 |
+|-------|------|-----------|------------|
+| Phase 0 (W0) | 도메인 전환 초기화 | 완료 | 블로그 자산 `docs/archive/` 이동, 새 `CLAUDE.md`, `/` 플레이스홀더, shadcn 7종 유지 |
+| Phase 1 (W1) | Notion `Quotes` 페치 + `/q/[slug]` 렌더 + 항목 표 파싱 + 합계 계산 | 파트타임 1주 (실작업 ~25h) | `lib/quotes.ts`, `app/q/[slug]/page.tsx`, `components/quote-view.tsx`, `scripts/test/quotes-client.ts` |
+| Phase 2 (W2) | PDF 라우트 + on-demand revalidate webhook + robots/noindex + Playwright E2E | 파트타임 1주 (실작업 ~25h) | `app/q/[slug]/pdf/route.ts`, `app/api/revalidate/route.ts`, `public/robots.txt`, 시드 견적 2건, E2E 회귀 리포트 |
+| Phase 3 (Future) | 10항목 우선순위 매트릭스 정렬 | 트리거 조건 발생 시 | 비밀번호 보호·자동 차단·열람 알림 등 (구현 보류) |
 
-### 1.3 현재 코드베이스 상태 (2026-05-17 기준)
-- 라우트 골격: `app/page.tsx`, `app/posts/page.tsx`, `app/posts/[slug]/page.tsx`, `app/category/[slug]/page.tsx`, `app/tag/[slug]/page.tsx`, `app/about/page.tsx`, `app/api/revalidate/route.ts` 모두 존재.
-- 모든 페이지는 `getPosts() / getCategories() / getPostBySlug()` 호출 + `"use cache"` + `cacheLife("minutes")` 패턴이 적용되어 있으며, 빈 응답을 안전히 처리한다.
-- `lib/notion.ts` 는 시그니처와 빈 구현체만 존재 → **W1에서 본격 구현 필요**.
-- `types/index.ts` 는 `PostSummary`, `Post`, `Category`, `Tag`, `PostStatus` 정의 완료.
-- shadcn/ui 컴포넌트: `button`, `card`, `field`, `input`, `label`, `separator`, `sonner` 존재.
-- 의존성 설치 완료: `@notionhq/client@^5.21.0`, `notion-to-md@^3.1.9`, `react-markdown@^10.1.0`, `remark-gfm@^4.0.1`, `rehype-highlight@^7.0.2`.
-- `.env.example` 에 `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `NOTION_REVALIDATE_SECRET` 변수 명시.
-
-> ✅ **재사용 포인트**: 이미 만들어진 페이지 셸을 다시 만들지 말 것. `lib/notion.ts` 함수 본문만 채우면 모든 페이지가 자동으로 데이터를 받는 구조.
+> 📌 가정: 운영자 1인 파트타임. 실작업 시간은 캘린더 데이가 아닌 **"코드를 작성·검증하는 순수 시간"** 기준. 회의·디자인 검토·문서화 제외. 외부 의존성(Vercel/Notion 정상 동작)은 가용하다고 가정.
 
 ---
 
-## 2. 마일스톤 요약
+## Phase 0 (W0): 도메인 전환 초기화 — 완료
 
-| 주차 | 기간 | 테마 | 핵심 산출물 | 검증 기준(DoD) |
-|------|------|------|-------------|----------------|
-| **W1** | 2026-05-17 ~ 2026-05-23 | 데이터 파이프라인 + 글 상세 렌더 | `lib/notion.ts` 실제 구현, 마크다운 렌더러, 시드 글 2~3편 노출 | 로컬에서 `/posts`, `/posts/[slug]` 가 실제 Notion 콘텐츠를 렌더하고, 시드 글의 코드/이미지가 정상 표시 |
-| **W2** | 2026-05-24 ~ 2026-05-30 | 발견성 (카테고리·태그·검색·홈) | 카테고리/태그 라우트 데이터 연결, 검색바, 홈 카테고리 칩 + 최신 글, "같은 카테고리 추천 3개" | 사용자가 카테고리·태그·검색 어느 경로로도 글을 찾을 수 있고, 홈에서 6개 카드/카테고리 칩이 실제 데이터로 렌더 |
-| **W3** | 2026-05-31 ~ 2026-06-06 | 운영 안정화 + 런칭 | ISR 검증, on-demand revalidate 연결, 시드 글 10편, Vercel 배포·도메인 연결, 카피 검수 | 정식 도메인에서 모든 페이지가 200 응답, Notion에서 글을 발행하면 60초 이내 노출, Lighthouse(모바일) 성능 ≥ 80 |
+### 목표
 
-> 📌 **가정 (W1~W3 일정 산정 기준)**
-> - 운영자(개발자) 1인이 주당 약 15~20시간 투입.
-> - Notion DB 스키마는 PRD DataTable과 1:1 일치하도록 사전에 만들어둔다(T0.1).
-> - Vercel 무료 플랜 한도 내(빌드 100/일, 함수 100k/월) 동작.
-> - 시드 글 10편은 운영자가 W2~W3 사이 병렬 작성.
+스타터킷 + 블로그 도메인 코드를 견적서 도메인으로 깔끔히 전환하고, 신규 작업이 시작될 수 있는 백지 상태를 만든다.
 
----
+### 완료 항목 (참고용)
 
-## 3. Phase별 상세 태스크
+- ✅ 블로그 PRD/ROADMAP/Shrimp 태스크 → `docs/archive/` 로 이동.
+- ✅ `app/posts`, `app/category`, `app/tag`, `app/about` 라우트 제거. `/`, `/not-found` 만 유지.
+- ✅ `lib/notion.ts` 제거 (W1 에서 `lib/quotes.ts` 신규 작성).
+- ✅ `CLAUDE.md` 견적서 도메인 기준 전면 재작성.
+- ✅ shadcn/ui 7종(button·card·field·input·label·separator·sonner), `components/common/*`(Header·Footer·ThemeProvider·ThemeToggle) 유지.
+- ✅ `scripts/test/notion-client.ts` 보존 — `databases.retrieve → dataSources.query` 2단계 패턴 인라인 복제 레퍼런스로 활용.
+- ✅ `next.config.ts` `images.remotePatterns` 3종 Notion 호스트 등록 유지.
 
-태스크 ID 컨벤션: `T<주차>.<번호>`. Size 는 S(<2h) / M(0.5~1d) / L(1~2d) / XL(>2d).
-담당 영역: `infra` / `data` / `ui` / `qa` / `ops` / `copy`.
+### Phase 0 DoD (이미 충족)
 
-### Phase 0 — 사전 준비 (착수 전 0.5일)
-
-| ID | 제목 | 담당 | Size | 선행 | 산출물 | DoD | 테스트 | 함정·메모 |
-|----|------|------|------|------|--------|-----|--------|----------|
-| T0.1 | Notion `Posts` DB 생성 | ops | S | — | Notion 워크스페이스의 Posts DB | 속성 9종(`Title`, `Slug`, `Status`, `Category`, `Tags`, `Summary`, `Cover`, `PublishedAt`, `(본문 페이지)`) 모두 존재. Integration 공유 권한 부여. | 수동(체크리스트) | `Slug` 는 text + 운영자가 직접 채움. 중복 시 빌드 실패 처리할 예정이므로 작성 가이드 마련. |
-| T0.2 | Notion Internal Integration 발급 | ops | S | T0.1 | `NOTION_TOKEN` 문자열 | `.env.local` 에 토큰 입력. Posts DB Share → Integration 권한 확인. | 수동(체크리스트) | `NEXT_PUBLIC_` 절대 금지. `.env.local` 은 `.gitignore` 됨을 재확인. |
-| T0.3 | `.env.local` 채우기 + 환경변수 검증 | infra | S | T0.2 | `.env.local` (gitignored) | `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `NOTION_REVALIDATE_SECRET` 3종 모두 채움. `npm run dev` 부팅 OK. | 수동 | `NOTION_REVALIDATE_SECRET` 은 32자 이상 랜덤. 운영/개발 동일 값 사용 금지(W3에서 분리). |
-| T0.4 | `server-only` 가드 도입 | infra | S | — | `npm i server-only`, `lib/notion.ts` 상단 `import "server-only"` | 클라이언트 컴포넌트에서 `lib/notion.ts` import 시 빌드 에러. | 통합(빌드) | CLAUDE.md 의 "NOTION_TOKEN 클라이언트 노출 방지" 가드. |
-
-#### Phase 0 테스트 계획
-- **T0.3** (수동): `.env.local` 작성 후 `npm run dev` 부팅 → 콘솔에 env 누락 경고 없음. 잘못된 토큰(예: 비어있는 값) 시나리오는 T1.1 단위 테스트에서 401 처리로 커버.
-- **T0.4** (통합/빌드): 임시로 클라이언트 컴포넌트(`"use client"` 파일)에서 `import { getPosts } from "@/lib/notion"` 추가 → `npm run build` 가 즉시 실패하는지 확인 → 원복.
+- 빌드 통과 (`npm run build`), lint 무경고 (`npm run lint`).
+- `/` 플레이스홀더가 견적서 도메인 안내 문구로 렌더.
+- 블로그 잔재(라우트·페치 레이어·타입) 없음.
 
 ---
 
-### Phase 1 (W1) — 데이터 파이프라인 + 글 상세 렌더
+## Phase 1 (W1): 데이터 페치 + 견적서 렌더
 
-> **목표**: Notion → 마크다운 → 화면. 시드 글 2~3편이 `/posts/[slug]` 에서 코드 하이라이트·이미지 포함 정상 렌더되어야 한다.
+### 목표
 
-| ID | 제목 | 담당 | Size | 선행 | 산출물 | DoD | 테스트 | 함정·메모 |
-|----|------|------|------|------|--------|-----|--------|----------|
-| T1.1 | Notion Client 인스턴스 + DB 쿼리 헬퍼 | data | M | T0.3 | `lib/notion.ts` 내부 `notion = new Client({...})`, `DATABASE_ID`, `queryPublishedPages()` private 헬퍼 | `notion.databases.query({ filter: { property: "Status", select: { equals: "Published" } }, sorts: [{ property: "PublishedAt", direction: "descending" }] })` 가 응답 반환. | 단위+통합 | `@notionhq/client` v5 응답 타입(`PageObjectResponse`)이 union 이라 narrowing 필요. 미리 internal 타입 가드(`isFullPage`) 정의. |
-| T1.2 | `getPosts()` 실제 구현 (PostSummary 매핑) | data | M | T1.1 | `lib/notion.ts` 의 `getPosts(): Promise<PostSummary[]>` 본문 | Notion property → `PostSummary` 변환. `title`, `slug`, `summary`, `category`, `tags[]`, `coverUrl`, `publishedAt`(ISO) 모두 채워짐. 필수 속성 누락 글은 `console.warn` 후 스킵. | 단위 | Notion `title` 속성은 `rich_text` 배열 → `plain_text` join. `coverUrl` 은 `file.expiry_time` 1시간 → 표시 시 `next/image` 재호스팅 권장(T1.6에서 처리). |
-| T1.3 | `getPostBySlug(slug)` + notion-to-md 변환 | data | L | T1.2 | `lib/notion.ts` 의 `getPostBySlug(slug): Promise<Post \| null>` 본문 | `Slug` 필터 쿼리 → 페이지 ID 추출 → `NotionToMarkdown` 으로 본문 변환 → `Post.content`(string) 반환. 없으면 `null`. | 단위+통합 | `notion-to-md@3.x` 는 `md.toMarkdownString(md.pageToMarkdown(pageId))` 형식. code 블록 언어 보존을 위해 `convertImagesToBase64: false` 유지. |
-| T1.4 | `getCategories()` / `getTags()` 집계 | data | S | T1.2 | `lib/notion.ts` 의 두 함수 본문 | `getPosts()` 결과를 in-memory 집계 → `{ slug, name, postCount }`. `slug` 는 URL-safe(공백→`-`, 한글 허용). | 단위 | 같은 페치 호출을 두 번 하지 않도록 같은 함수 내에서 `await getPosts()` 한 번만 호출. 호출부의 `"use cache"` 가 dedup 처리하지만, 함수 내부에서도 한 번만 호출이 명확. |
-| T1.5 | Slug 중복 검증 (빌드 실패) | data/qa | S | T1.2 | `lib/notion.ts` `getPosts()` 내부 검증 로직 | 동일 slug 가 2건 이상이면 `throw new Error("Duplicate slug: <slug>")`. 빌드 시 즉시 실패. | 단위 | 운영자 작성 실수 예방 가드. PRD 정합성 규칙 직접 반영. |
-| T1.6 | 마크다운 렌더러 컴포넌트 | ui | L | T1.3 | `components/post/post-content.tsx` (서버 컴포넌트) | `react-markdown` + `remark-gfm` + `rehype-highlight` 조합. `code` 블록은 `hljs` 스타일, `img` 태그는 `next/image` 로 래핑(LCP 최적화). `app/posts/[slug]/page.tsx` 의 placeholder `<pre>` 영역 교체. | Playwright E2E | `rehype-highlight` CSS 테마는 `app/globals.css` 에 `@import "highlight.js/styles/github.css"` (라이트) + `@import "highlight.js/styles/github-dark.css" (prefers-color-scheme: dark)` 로 분기. `react-markdown` 의 `components` prop 으로 `img` 오버라이드. |
-| T1.7 | 코드 하이라이트 CSS 테마 적용 + 다크모드 분기 | ui | S | T1.6 | `app/globals.css` 갱신 | `.dark` 클래스 토글 시 코드 블록 다크 테마로 전환. | Playwright E2E | `next-themes` 가 `.dark` 클래스 토글 → `@custom-variant dark` 와 일치. CSS 변수 충돌 주의. |
-| T1.8 | 시드 글 2~3편 작성 (W1 검증용) | copy | M | T1.6 | Notion DB 에 Published 글 2~3편 (코드, 이미지, h1~h3, 목록 포함) | `/posts` 카드 그리드 + `/posts/[slug]` 본문 모두 정상 렌더. | 수동(체크리스트) | "초보 톤" 적용 — 본격 카피 검수는 T3.7 에서. |
-| T1.9 | 글 상세 페이지 메타데이터(OG) 검증 | qa | S | T1.6, T1.8 | 브라우저 DevTools 확인 | `generateMetadata` 가 `title`, `description`, `og:image` 채움. `coverUrl` 없을 때도 페이지 정상 렌더. | Playwright E2E | `app/posts/[slug]/page.tsx` 의 `generateMetadata` 는 이미 구현됨 — 데이터 흐름만 검증. |
+운영자가 Notion `Quotes` DB에 행을 추가하고 `Status=Published` 로 바꾸면, `/q/[slug]` 에서 견적서가 깔끔하게 렌더되고 항목·합계가 자동 계산된다. 모바일에서도 표가 깨지지 않는다.
 
-#### Phase 1 테스트 계획
+### 작업 항목
 
-> 단위/통합 테스트는 러너가 미설정이므로 **`tsx` 또는 `node --import tsx` 기반의 임시 스크립트**(`scripts/test/*.ts`)로 실행하거나, MVP 단계에서는 콘솔 출력 + 수동 어서션도 허용. Playwright E2E 는 **MCP**(`mcp__playwright__*`)를 통해 실행한다.
+#### T1.1 — Notion `Quotes` DB 스키마 정의 및 시드 1건 입력
 
-- **T1.1 Notion Client 헬퍼**
-  - 정상: 유효 토큰 + DB ID → `queryPublishedPages()` 가 배열 반환, 각 항목 `object === "page"`.
-  - 실패 — 인증: `NOTION_TOKEN` 을 의도적으로 잘못된 값으로 바꾼 임시 클라이언트 → 401(`APIErrorCode.Unauthorized`) 캐치 + 명확한 에러 메시지.
-  - 실패 — DB 미공유: 올바른 토큰이지만 Integration 미공유 DB ID → 404 캐치, 운영자에게 "Integration 권한을 확인하세요" 안내.
-  - 엣지 — 네트워크 에러/타임아웃: `fetch` 모킹 또는 잘못된 base URL → 예외 전파.
-  - 엣지 — 빈 결과: `Status=Published` 글 0건 → `[]` 반환, throw 없음.
-- **T1.2 `getPosts()` 매핑**
-  - 정상: 모든 필수 속성이 채워진 1건 → `PostSummary` 모든 필드(특히 `publishedAt` ISO 형식) 정상.
-  - 엣지 — 필수 누락: `Title` 또는 `Slug` 없는 항목 → `console.warn` 1회 + 결과 배열에서 스킵.
-  - 엣지 — Cover 없음: `Cover` 속성 비어있는 글 → `coverUrl: null`, 페이지에서 fallback 처리.
-  - 엣지 — 빈 DB: `queryPublishedPages()` 가 `[]` → `getPosts()` 도 `[]` 반환, 페이지 빈 상태 분기 정상.
-  - 엣지 — 멀티 카테고리: Select 1개 vs Multi-select Tag → 각각 string / string[] 매핑 검증.
-- **T1.3 `getPostBySlug` + notion-to-md**
-  - 정상: 존재하는 slug → `Post` 반환, `content` 비어있지 않음.
-  - 정상 — 코드 블록: notion 의 ```ts 블록이 마크다운에서 ```` ```ts ```` 로 언어 정보 보존되어야 함.
-  - 정상 — 이미지 포함: 이미지 블록 → `![alt](url)` 형식, URL 은 Notion `file.url` 또는 `external.url`.
-  - 실패 — 없는 slug: `getPostBySlug("nonexistent")` → `null` (throw 아님), 페이지에서 `notFound()` 호출 가능.
-  - 엣지 — 동명 slug 다수: T1.5 의 검증과 별개로 `getPostBySlug` 는 첫 결과 반환(또는 throw — 결정 필요).
-- **T1.4 `getCategories()` / `getTags()`**
-  - 정상: 카테고리 3종 × 글 5건 → `{ slug, name, postCount }` 정확.
-  - 엣지 — 빈 DB: `[]` 반환.
-  - 엣지 — 동일 이름 다른 케이스(`AI강의` vs `ai강의`): 정규화 정책 결정 후 단위 테스트 잠금.
-- **T1.5 Slug 중복 검증**
-  - 정상(통과): slug 모두 유니크 → throw 없음.
-  - 실패: 동일 slug 2건 → `Error("Duplicate slug: <slug>")` throw, 메시지에 충돌 slug 명시.
-  - 엣지 — 빈 배열: throw 없음.
-- **T1.6 PostContent 렌더러 — Playwright MCP E2E**
-  - 사전: `npm run dev` 실행, 시드 글 1편(코드+이미지+h1~h3+목록 포함) 발행 상태.
-  - `mcp__playwright__browser_navigate { url: "http://localhost:3000/posts/<seed-slug>" }`
-  - `mcp__playwright__browser_snapshot` → ARIA 트리에서 `heading[level=1]`(글 제목), `heading[level=2/3]` 존재 확인.
-  - `mcp__playwright__browser_evaluate { function: "() => document.querySelectorAll('pre code.hljs').length" }` → ≥ 1 (코드 하이라이트 적용 클래스).
-  - `mcp__playwright__browser_console_messages` → `error`/`warning` 레벨 메시지 0건.
-  - `mcp__playwright__browser_take_screenshot { filename: "t1-6-light.png", fullPage: true }`.
-- **T1.7 다크모드 코드 하이라이트 — Playwright MCP E2E**
-  - 위 시드 글에서 `mcp__playwright__browser_click` 으로 `ThemeToggle` 클릭 → 다크 모드 진입.
-  - `mcp__playwright__browser_evaluate { function: "() => document.documentElement.classList.contains('dark')" }` → `true`.
-  - `mcp__playwright__browser_take_screenshot { filename: "t1-7-dark.png", fullPage: true }` → 라이트 스크린샷과 시각 차이.
-- **T1.9 OG 메타 — Playwright MCP E2E**
-  - `mcp__playwright__browser_navigate` 후 `mcp__playwright__browser_evaluate { function: "() => ({ title: document.title, og: document.querySelector('meta[property=\"og:image\"]')?.content })" }` → `title`/`og:image` 모두 비어있지 않음.
-  - `coverUrl` 없는 글 1편 추가 발행 → 같은 평가에서 페이지 200 응답 + OG 폴백 동작.
+- **추정**: M (0.5~1d) · **담당 영역**: data / ops · **테스트**: 수동 체크리스트
+- **세부 단계**:
+  1. Notion 워크스페이스에 `Quotes` Database 생성. 속성 11종 정의(PRD DataTable 절 참고):
+     - `Title`(title), `Slug`(text, unique), `Status`(select: Draft/Published/Archived), `ClientCompany`(text), `ClientContact`(text), `IssuerCompany`(text), `QuoteNumber`(text), `IssuedAt`(date), `ValidUntil`(date), `TaxRate`(number, default 10), `Notes`(text, multi-line).
+     - v5 SDK 트랩: `databases.create` 의 `properties` 인자는 무시됨 → DB 생성 후 `dataSources.update({data_source_id, properties: {...}})` 로 속성 정의해야 한다. 본 태스크는 Notion UI 에서 수동 생성으로 우회(운영자 시점에선 UI가 더 쉬움).
+  2. Integration `connect` (Notion 페이지 우상단 `···` → `Connections`).
+  3. 정상 시드 견적 1건 입력: 표는 page body 첫 `table` 블록에 `[항목명, 수량, 단가, 비고]` 4열 컬럼으로 작성. 슬러그는 nanoid(32자) 수동 입력(`regression-seed-active`로 시작하지 않게 진짜 추측 불가 값 사용; 식별용 별칭은 `Title` 에 `[regression-seed-active]` 접두).
+  4. `.env.local` 에 `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `REVALIDATE_SECRET`(W2 에서 사용) 채움.
+- **인수 조건**:
+  - Notion `Quotes` DB의 모든 속성이 PRD DataTable과 1:1 매핑.
+  - `Status=Published` 시드 견적이 Integration 권한으로 페치 가능(다음 태스크에서 검증).
+- **의존성**: 없음
+- **테스트 계획**:
+  - 검증 도구: 수동 + W1.2 단위 테스트로 간접 확인.
+  - 체크리스트:
+    1. Notion UI에서 시드 견적이 보이고, Integration 이 명시적으로 connect 되어 있다.
+    2. `.env.local` 의 `NOTION_TOKEN` 이 `ntn_` 또는 `secret_` 접두, `NOTION_DATABASE_ID` 가 32자 hex.
+- **함정·메모**: ⚠️ Integration connect 는 API 로 자동화 불가능 — 운영자가 Notion UI 에서 직접 수행해야 함. 누락 시 모든 페치가 `ObjectNotFound` 로 실패.
 
-**Phase 1 완료 정의(DoD)**
-- 로컬 `npm run dev` 에서 `/`, `/posts`, `/posts/[slug]` 가 실제 Notion 데이터로 렌더된다.
-- 코드 블록·이미지·표(GFM) 가 시드 글에서 정상 표시된다.
-- 빈 응답(0건)·없는 slug(`notFound()`) 분기가 깨지지 않는다.
-- `npm run build` 통과, Slug 중복 시 빌드가 즉시 실패한다.
-- **위 Phase 1 테스트 계획의 시나리오가 모두 통과(Playwright MCP 실측 포함). 단위/통합 테스트 결과는 콘솔 또는 임시 스크립트 출력으로 자기 검증.**
+#### T1.2 — `lib/quotes.ts` 페치 레이어 (`getQuoteBySlug`)
 
-**Phase 1 리스크**
-- ⚠️ `cacheComponents: true` 환경에서 페치 함수를 잘못된 위치에서 호출하면 `Uncached data was accessed outside of <Suspense>` 빌드 에러 — 패턴은 `app/posts/[slug]/page.tsx` 의 `PostContent` 구조를 그대로 따른다.
-- ⚠️ Notion 이미지 URL 의 1시간 만료(`file.expiry_time`) — `next/image` 재호스팅으로 우회하되, 캐시 만료 시점에 이미지 깨짐 가능 → T3.4 webhook + ISR 재생성으로 보강.
+- **추정**: L (1~2d) · **담당 영역**: data · **테스트**: 단위 + 통합 (`scripts/test/quotes-client.ts`)
+- **세부 단계**:
+  1. `lib/quotes.ts` 신규 작성. 첫 줄 `import "server-only"`. `requireEnv("NOTION_TOKEN")` / `requireEnv("NOTION_DATABASE_ID")` 헬퍼.
+  2. `Client` 인스턴스 + `resolveDataSourceId()` (모듈 로드 후 1회 캐시): `databases.retrieve({database_id})` → `data_sources[0].id`.
+  3. `getQuoteBySlug(slug: string): Promise<Quote | null>`:
+     - 슬러그 형식 검증 (`/^[A-Za-z0-9_-]{32,}$/`) — 위반 시 즉시 `null` 반환 (404 처리).
+     - `dataSources.query({ data_source_id, filter: { and: [ {property: "Status", select: {equals: "Published"}}, {property: "Slug", rich_text: {equals: slug}} ] }, page_size: 2 })`.
+     - 결과 2건 이상 → `throw new Error("Duplicate slug: ${slug}")` (PRD 정합성 규칙 1).
+     - 결과 0건 → `null`.
+     - 1건 → Notion 속성을 TS `Quote` 타입으로 정규화(`title`, `slug`, `status`, `clientCompany`, `clientContact`, `issuerCompany`, `quoteNumber`, `issuedAt`, `validUntil`, `taxRate`, `notes`).
+     - 필수 속성(`title` / `slug` / `status` / `issuerCompany` / `clientCompany`) 누락 → `console.warn` + 해당 필드 `null` 채움 (전체 throw 금지, PRD 정합성 규칙 2).
+  4. `types/index.ts` 신규 작성 — `Quote`, `QuoteItem` 인터페이스 (PRD DataTable 기준).
+- **인수 조건**:
+  - 정상 시드 견적 조회 → `Quote` 객체 반환, 모든 필드 채워짐.
+  - 잘못된 슬러그(32자 미만, 특수문자 포함) → `null`.
+  - Notion 401 → `APIResponseError` throw, 호출부에서 처리 가능.
+  - 빈 결과(슬러그 미존재) → `null` (throw 금지).
+  - 중복 slug → throw.
+- **의존성**: T1.1
+- **테스트 계획** — `scripts/test/quotes-client.ts` (인라인 복제 패턴, `npm run test:quotes` 스크립트 추가):
+  - **시나리오 1 (정상)**: 시드 견적 슬러그로 페치 → 결과 1건, 필수 5속성 모두 not-null.
+  - **시나리오 2 (실패: 인증)**: 잘못된 `NOTION_TOKEN` → `APIErrorCode.Unauthorized` throw 캐치.
+  - **시나리오 3 (실패: 빈 결과)**: 존재하지 않는 슬러그 → `null` 반환, throw 없음.
+  - **시나리오 4 (엣지: 슬러그 형식)**: `"too-short"` 입력 → `null` (Notion 호출 자체가 발생하지 않아야 함, fetch 카운트 0 확인).
+  - **시나리오 5 (엣지: 중복 slug)**: 동일 슬러그 2건 시드 → throw (시드 생성·삭제는 스크립트 내 setup/teardown).
+  - 모든 시나리오에 `=== 결과 요약 ===` 출력 + `process.exitCode = 0/1`. 레퍼런스: `scripts/test/notion-client.ts`.
+  - ⚠️ `lib/quotes.ts` 직접 import 금지 — `server-only` 가드가 Node 환경에서 throw. v5 SDK 만 직접 호출하는 인라인 복제로 동치성 확보.
+- **함정·메모**:
+  - ⚠️ `@notionhq/client` v5: `databases.query` 제거됨 → `databases.retrieve` → `dataSources.query` 2단계 필수.
+  - ⚠️ `NOTION_TOKEN` 서버 전용. `NEXT_PUBLIC_` 절대 금지.
+  - ⚠️ Notion `rich_text` 는 배열 → `.map(t => t.plain_text).join("")` 패턴.
 
----
+#### T1.3 — 항목 표 파싱 + 합계 계산 (`getQuoteItems`)
 
-### Phase 2 (W2) — 발견성 (카테고리·태그·검색·홈)
+- **추정**: M (0.5~1d) · **담당 영역**: data / 비즈니스 로직 · **테스트**: 단위 (`scripts/test/quotes-items.ts`)
+- **세부 단계**:
+  1. `lib/quotes.ts` 에 `getQuoteItems(pageId: string): Promise<{ items: QuoteItem[]; warning: string | null }>` 추가.
+  2. `blocks.children.list({block_id: pageId})` 로 page body 블록 페치.
+  3. 첫 번째 `table` 블록을 찾는다. 없으면 `{items: [], warning: "표 블록을 찾을 수 없습니다."}` 반환.
+  4. 해당 table 블록의 `children`(table_row) 페치. 첫 행은 헤더로 간주.
+  5. 컬럼 약속 검증: 헤더가 정확히 `["항목명", "수량", "단가"]` 또는 `["항목명", "수량", "단가", "비고"]` 인지 확인. 위반 시 `{items: [], warning: "표 컬럼 약속 위반: 헤더는 [항목명, 수량, 단가, (비고)] 이어야 합니다."}` 반환 (PRD 정합성 규칙 4).
+  6. 데이터 행을 `QuoteItem[]` 으로 변환. 수량·단가는 `parseInt` 후 NaN 시 0. 행별 `amount = quantity * unitPrice`.
+  7. `calculateTotals(items, taxRate)`: `subtotal = Σ amount`, `tax = Math.round(subtotal * taxRate / 100)`, `total = subtotal + tax`. 모두 정수 원 단위 (PRD 정합성 규칙 6).
+- **인수 조건**:
+  - 정상 시드 견적의 항목 표를 정확히 파싱, 행별 amount 와 합계 일치.
+  - 헤더 다른 표 → 빈 배열 + warning 메시지.
+  - 표 자체가 없는 페이지 → 빈 배열 + warning.
+  - 부가세율 0 → `tax = 0`, 결과에서 부가세 행 숨김 가능.
+  - 부가세율 10 → 정수 반올림.
+- **의존성**: T1.2
+- **테스트 계획** — `scripts/test/quotes-items.ts`:
+  - **시나리오 1 (정상)**: 시드 견적의 page body 표 파싱 → 행 수·금액 일치, warning null.
+  - **시나리오 2 (실패: 표 없음)**: 빈 page body 가진 임시 시드 → `{items: [], warning: /표 블록을 찾을 수 없습니다/}`.
+  - **시나리오 3 (엣지: 헤더 위반)**: 헤더가 `["품목", "Q", "P"]` 인 임시 시드 → `{items: [], warning: /표 컬럼 약속 위반/}`.
+  - **시나리오 4 (엣지: 수량/단가 비어있음)**: 수량 셀이 빈 행 → `quantity = 0`, `amount = 0`, throw 없음.
+  - **시나리오 5 (엣지: 부가세 0%)**: `taxRate=0` → `tax = 0`, `total = subtotal`.
+  - **시나리오 6 (엣지: 반올림)**: `subtotal=1234567`, `taxRate=10` → `tax = 123457` (정수 반올림 확인).
+- **함정·메모**:
+  - Notion table 블록은 `has_children=true` 이며 `children` 로 한 번 더 페치해야 row 들을 얻을 수 있다.
+  - 셀 내용은 `cells: rich_text[][]` 이중 배열 — `cells[colIdx].map(t => t.plain_text).join("")` 으로 평탄화.
 
-> **목표**: 사용자가 어떤 경로로 들어와도 원하는 글을 3 클릭 이내 도달. 홈은 카테고리 칩 + 최신 글 6개.
+#### T1.4 — 견적서 도메인 타입 + 정규화 헬퍼
 
-| ID | 제목 | 담당 | Size | 선행 | 산출물 | DoD | 테스트 | 함정·메모 |
-|----|------|------|------|------|--------|-----|--------|----------|
-| T2.1 | 카테고리 페이지 데이터 검증 + 한글 slug 인코딩 | ui/data | S | T1.4 | `app/category/[slug]/page.tsx` 동작 확인, 필요 시 `decodeURIComponent` 처리 | `/category/AI강의` 등 한글 slug URL 정상 동작. 0건일 때 안내 표시. | Playwright E2E | 현재 코드가 `p.category === slug` 단순 비교 — slug 가 `name` 그대로면 한글 URL 인코딩됨. `getCategories()` 가 반환하는 `slug` 와 동일 키여야 함. |
-| T2.2 | 태그 페이지 데이터 검증 + 인코딩 | ui/data | S | T1.4 | `app/tag/[slug]/page.tsx` 동작 확인 | `/tag/GPT` 등 정상 동작. 0건 안내. | Playwright E2E | T2.1 과 동일한 slug 정규화 정책 공유. |
-| T2.3 | 홈 카테고리 칩 + 최신 글 6개 검증 | ui | S | T1.4, T1.2 | `app/page.tsx` 가 실제 데이터로 렌더 | 카테고리 칩에 글 수 카운트 표시. 글 0건 시 가이드 문구. | Playwright E2E | 이미 페이지가 구현됨 — 데이터 흐름만 검증. |
-| T2.4 | 클라이언트 검색바 컴포넌트 | ui | L | T1.2 | `components/posts/search-bar.tsx` (`"use client"`) + `app/posts/page.tsx` 통합 | 입력값으로 `title` + `summary` + `tags` 에 대해 `includes` 매칭 (대소문자 무시). 결과 즉시 필터링. `field.tsx` + `input.tsx` 조합 사용. | Playwright E2E | **`@base-ui/react` 기반** — Radix props 와 다름. `field.tsx` 의 `Field`/`FieldLabel` 사용 패턴은 기존 컴포넌트 파일 확인. 폼이 아닌 단순 검색은 `input.tsx` 단독 사용도 OK. |
-| T2.5 | 검색 인덱스 데이터 흐름 결정 | data | S | T2.4 | 빌드 시 단일 JSON 로드 vs 페이지 prop 전달 결정 문서화 | 글 100개 이하 가정 하에 SSR 페이지에서 `PostSummary[]` 를 클라이언트 컴포넌트로 prop 전달. 별도 API 라우트 불필요. | 통합(번들 크기) | `fuse.js` 도입은 50개 초과 시점에 재검토 — MVP 는 `includes` 로 충분. 의존성 추가 미루기. |
-| T2.6 | "같은 카테고리 추천 3개" 섹션 | ui | M | T1.2 | `app/posts/[slug]/page.tsx` 하단 `<RelatedPosts>` 컴포넌트 추가 | 현재 글 제외, 같은 카테고리 글 최대 3개. 0건 시 섹션 숨김. | Playwright E2E | `Suspense` 안에 두거나 부모 `PostContent` 내부에서 호출. 추가 `await getPosts()` 는 `"use cache"` 덕에 dedup 됨. |
-| T2.7 | About 페이지 보강 | ui/copy | S | — | `app/about/page.tsx` 에 운영자 사진 placeholder, 메일/SNS 링크, 다룬 도구 리스트 추가 | TODO 주석 제거. 실제 정보로 채움. | 수동(체크리스트) | 초보 톤 유지. 운영자 개인정보 노출 범위 사전 결정. |
-| T2.8 | Header 네비게이션 정리 | ui | S | — | `components/common/Header.tsx` 의 메뉴를 `홈 / 글 / About` 으로 정렬 | 모바일 햄버거 또는 가로 메뉴 일관성 확인. | Playwright E2E | 스타터킷 잔여 메뉴(로그인 등) 남아있는지 마지막 점검. |
-| T2.9 | Footer 카피·링크 정리 | ui/copy | S | — | `components/common/Footer.tsx` 갱신 | 운영자 이름·연도·간단 카피. | 수동(체크리스트) | 외부 SNS 링크는 `rel="noopener noreferrer"` 필수. |
-| T2.10 | 404(`not-found`) 페이지 톤 다듬기 | ui/copy | S | — | `app/not-found.tsx` | "초보 톤"으로 안내, `/posts` 와 `/` 로 가는 버튼. | Playwright E2E | — |
+- **추정**: S (<2h) · **담당 영역**: data · **테스트**: 단위 (T1.2/T1.3 에 통합)
+- **세부 단계**:
+  1. `types/index.ts` 에 `Quote`, `QuoteItem`, `QuoteTotals`, `QuoteStatus` 타입 정의.
+  2. `lib/quotes.ts` 에 `normalizeQuote(page: PageObjectResponse): Quote` 헬퍼 분리 → T1.2 에서 호출.
+  3. JSDoc 으로 각 필드의 Notion 속성 매핑 명시.
+- **인수 조건**: `Quote` 타입이 PRD DataTable의 11속성 + derived 3종(`subtotal/tax/total`) 모두 표현. `tsc` 오류 0.
+- **의존성**: T1.2 (병행 가능)
+- **테스트 계획**: T1.2 시나리오 1에서 모든 필드 not-null 검증으로 흡수. 별도 스크립트 불필요.
+- **함정·메모**: 타입은 `@notionhq/client/build/src/api-endpoints` 의 `PageObjectResponse` 와 호환되도록 작성.
 
-#### Phase 2 테스트 계획
+#### T1.5 — `/q/[slug]` 페이지 셸 + Suspense 데이터 컴포넌트
 
-- **T2.1 카테고리 페이지 — Playwright MCP E2E**
-  - 정상: `mcp__playwright__browser_navigate { url: "http://localhost:3000/category/AI강의" }` (브라우저가 자동 인코딩) → `mcp__playwright__browser_snapshot` 으로 글 카드 목록 노출 확인.
-  - 엣지 — 0건: 글이 없는 카테고리 slug → "이 카테고리에는 아직 글이 없습니다" 등 안내 텍스트 ARIA 트리 존재.
-  - 엣지 — 인코딩: `%EC%9D%B8%EC%BD%94%EB%94%A9%EB%90%9C` 형식의 직접 URL 입력 → 동일 결과.
-  - 엣지 — 없는 slug: 존재하지 않는 카테고리 → 0건 안내 또는 `notFound()` 처리 (결정 후 잠금).
-- **T2.2 태그 페이지 — Playwright MCP E2E**
-  - 정상: `/tag/GPT` 이동 → 매칭 글 표시.
-  - 엣지 — 0건 / 미존재 slug: T2.1 과 동일 패턴.
-- **T2.3 홈 — Playwright MCP E2E**
-  - 정상: `/` 이동 → `mcp__playwright__browser_snapshot` 으로 카테고리 칩 ≥ 1개, 최신 글 카드 ≤ 6개 확인.
-  - 엣지 — 0건: 시드 글 모두 Draft 로 변경 후 페이지 이동 → 가이드 문구 노출 (테스트 후 원복).
-  - 검증: `mcp__playwright__browser_evaluate { function: "() => document.querySelectorAll('article').length" }` 또는 카드 셀렉터.
-- **T2.4 검색바 — Playwright MCP E2E**
-  - 사전: `/posts` 이동.
-  - 정상: `mcp__playwright__browser_type { ref: <검색 input>, text: "GPT" }` → 결과 카드 수가 입력 전보다 감소, 모든 카드 텍스트에 "GPT" 포함(대소문자 무시).
-  - 엣지 — 대소문자: `gpt` 입력 → 동일 결과.
-  - 엣지 — 빈 결과: `zzzzz_no_match` 입력 → "검색 결과 없음" 안내 + "전체 글 보기" 폴백 CTA.
-  - 엣지 — 입력 비움: 텍스트 삭제 → 전체 글로 복원.
-  - 엣지 — 한글: "도구" 입력 → tag/summary 에 "도구" 포함된 글만 노출.
-- **T2.5 검색 데이터 흐름 — 통합(번들 크기)**
-  - 빌드 후 `/posts` 페이지의 `__next` HTML 또는 RSC payload 크기 확인 → gzipped < 200KB (R 리스크 게이트).
-- **T2.6 RelatedPosts — Playwright MCP E2E**
-  - 정상: 같은 카테고리 글 ≥ 4편 보장한 시드 → 상세 페이지 하단에 정확히 3개 카드 노출, 현재 글 slug 미포함.
-  - 엣지 — 동일 카테고리 1편(자기 자신): 섹션 자체가 DOM 에 없어야 함 → `mcp__playwright__browser_evaluate { function: "() => !!document.querySelector('[data-testid=\"related-posts\"]')" }` → `false`.
-  - 엣지 — 2편: 정확히 2개 노출(3개 미만도 표시).
-- **T2.7 / T2.9** (수동 체크리스트): TODO 주석 grep 결과 0건, About 의 메일 링크 클릭 시 `mailto:` 동작, Footer SNS 링크 `rel="noopener noreferrer"` 속성 존재.
-- **T2.8 Header — Playwright MCP E2E**
-  - `mcp__playwright__browser_navigate` `/` → `mcp__playwright__browser_snapshot` → 메뉴 항목이 "홈 / 글 / About" 셋이며 로그인/회원가입 잔재 0건.
-  - `mcp__playwright__browser_resize { width: 375, height: 812 }` → 모바일 메뉴(햄버거 또는 가로) 정상 노출 + 클릭 동작.
-- **T2.10 404 — Playwright MCP E2E**
-  - `/__nonexistent_path__` 이동 → `mcp__playwright__browser_snapshot` 으로 안내 카피 + `/posts`·`/` 링크 2종 존재 확인.
+- **추정**: M (0.5~1d) · **담당 영역**: ui · **테스트**: 빌드 + 수동 + Playwright E2E (T2.6 에서 본격 검증)
+- **세부 단계**:
+  1. `app/q/[slug]/page.tsx` 생성. `params: Promise<{slug: string}>` await.
+  2. 페이지 구조: 정적 셸(헤더·로고 영역) + `<Suspense fallback={<QuoteSkeleton />}>` 안에 `<QuoteData slug={slug} />` 배치.
+  3. `<QuoteData>` 는 별도 서버 컴포넌트로 분리. 첫 줄 `"use cache"` + `cacheLife("minutes")` + `cacheTag(`quote:${slug}`)`. `getQuoteBySlug(slug)` 호출 → `null` 이면 `notFound()`.
+  4. 응답 헤더에 `X-Robots-Tag: noindex, nofollow` 강제 (PRD 정합성 규칙 5). Next.js 16 에서는 `headers()` 또는 metadata API 활용.
+- **인수 조건**:
+  - 시드 견적 슬러그로 접속 → 셸이 먼저 보이고, 데이터 영역이 streaming으로 채워짐.
+  - 잘못된 슬러그 → 404 페이지(`app/not-found.tsx`) 렌더.
+  - 응답 헤더에 `x-robots-tag: noindex, nofollow` 포함 (curl 또는 Playwright 로 검증).
+  - `npm run build` 통과 — Cache Components 의 `Uncached data was accessed outside of <Suspense>` 에러 없음.
+- **의존성**: T1.2, T1.3, T1.4
+- **테스트 계획**:
+  - 빌드 검증: `npm run build` → 에러 없음.
+  - 수동: 로컬 `npm run dev` 에서 시드 슬러그·잘못된 슬러그·미공개 슬러그 3종 접속.
+  - Playwright (T2.6 에서 본격): `browser_navigate('/q/<seed-slug>')` → `browser_snapshot()` 으로 견적 헤더·발행자·고객사 텍스트 확인.
+- **함정·메모**:
+  - ⚠️ Next.js 16: `params` Promise → `await`. 동적 라우트의 데이터 페치는 **반드시 `<Suspense>` 안에 두어야** 빌드 통과 (Cache Components 규칙).
+  - ⚠️ `"use cache"` + `cacheLife("minutes")` 사용. `export const revalidate = N` 금지.
+  - ⚠️ 응답 헤더 강제는 Next.js 16 권장 패턴 확인 필요 (Route Handler + Middleware vs Page response). Middleware 가 가장 안정적.
 
-**Phase 2 완료 정의(DoD)**
-- 카테고리·태그 URL이 한글 slug 포함해도 정상 동작.
-- `/posts` 에서 키워드 입력 시 클라이언트 필터링이 즉시 반영.
-- 홈에서 카테고리 칩과 최신 글 6개가 실제 데이터로 표시.
-- 글 상세 하단에 "같은 카테고리 추천 3개" 가 출력.
-- Lighthouse(모바일) 접근성 ≥ 90.
-- **위 Phase 2 테스트 계획의 시나리오가 모두 통과(Playwright MCP 실측 포함).**
+#### T1.6 — `<QuoteView>` 컴포넌트 (데스크톱 + 모바일 반응형)
 
-**Phase 2 리스크**
-- ⚠️ 한글 카테고리/태그 slug 의 URL 인코딩 일관성 — 입력(`Link href`) / 페치(`getPostsByCategory`) / 표시(`category` 비교) 세 지점에서 모두 동일한 정규화 필요. **결정: slug = decoded name (한글 그대로)**. 한 곳 정해 문서화.
-- ⚠️ 클라이언트 검색은 `PostSummary` 100건 직렬화를 매 페이지 로드마다 전송 — 글 50건 초과 시 페이지 무게 점검(목표 < 200KB gzipped).
+- **추정**: L (1~2d) · **담당 영역**: ui · **테스트**: 수동 + Playwright (T2.6)
+- **세부 단계**:
+  1. `components/quote-view.tsx` 신규 작성 (서버 컴포넌트). props: `quote: Quote`, `items: QuoteItem[]`, `totals: QuoteTotals`, `itemsWarning: string | null`, `isExpired: boolean`.
+  2. PRD 와이어프레임 기준 레이아웃:
+     - 상단: 발행자 회사명·로고(텍스트 가능)·발행일·견적번호·유효기간.
+     - 받는 분: 고객사명·담당자.
+     - 견적 항목 표: 데스크톱은 `<table>`, 모바일(`@media (max-width: 640px)` 또는 Tailwind `sm:` 미만)은 카드 형태(`항목명 / 수량 × 단가 = 금액`).
+     - 합계 영역: 소계·부가세(taxRate=0 이면 숨김)·총합계. 정수 원 단위 + `Intl.NumberFormat("ko-KR")` 포맷.
+     - 비고/결제 조건: `notes` 영역.
+     - 하단 + 우상단 2곳에 "PDF 다운로드" 버튼 (T2.x 에서 동작 연결).
+  3. 필수 속성 누락 경고 배너 (PRD 정합성 규칙 2): `quote.title/issuerCompany/clientCompany` 중 하나라도 null → 상단 노란색 배너 "일부 필수 정보가 누락되어 표시되지 않은 항목이 있습니다."
+  4. 항목 표 컬럼 약속 위반 시(`itemsWarning != null`): 빈 표 + 상단 빨간 배너 (PRD 정합성 규칙 4).
+- **인수 조건**:
+  - 데스크톱(≥1024px): A4 비율에 가까운 단일 컬럼, 표가 가로 스크롤 없이 표시.
+  - 모바일(<640px): 항목이 카드형으로 분해, 가로 스크롤 없음, 합계 금액 가독성 확보.
+  - 합계 금액이 `1,900,000원` 형태로 표시.
+  - 만료 견적은 상단에 빨간 배너 "유효기간이 만료되었습니다" + 본문은 정상 노출.
+  - 다크모드에서도 표·합계 가독성 유지 (Tailwind v4 토큰 활용).
+- **의존성**: T1.5
+- **테스트 계획**:
+  - 수동: 데스크톱/모바일/다크모드 3종 viewport 에서 시드 견적 시각 검수.
+  - Playwright (T2.6 에서 본격):
+    - `browser_resize(375, 667)` 후 `browser_snapshot()` → 모바일 카드 레이아웃 확인, 가로 스크롤 발생 안 함.
+    - `browser_take_screenshot({fullPage: true})` 다크모드·라이트모드 베이스라인 2장.
+- **함정·메모**:
+  - shadcn/ui = `@base-ui/react` (Radix 아님). 표 컴포넌트는 자체 `<table>` 직접 사용 가능 (shadcn `table` 별도 추가 필요 시 `mcp__shadcn__get_add_command_for_items` 활용).
+  - 한글 폰트는 W2 의 PDF 폰트 임베드와 동일하게 Pretendard 사용 → T2.3 에서 결정 후 본 컴포넌트도 동일 폰트 적용.
 
----
+#### T1.7 — 만료 견적 배너 + `isExpired` 판정 로직
 
-### Phase 3 (W3) — 운영 안정화 + 런칭
+- **추정**: S (<2h) · **담당 영역**: data + ui · **테스트**: 단위 (T1.2 에 통합) + Playwright (T2.6)
+- **세부 단계**:
+  1. `lib/quotes.ts` 에 `isQuoteExpired(quote: Quote, now = new Date()): boolean` 헬퍼. `quote.validUntil < now` 면 true.
+  2. `<QuoteData>` 에서 호출해 `<QuoteView isExpired={...}>` 로 전달.
+  3. `<QuoteView>` 상단 배너 (T1.6 에 포함).
+- **인수 조건**:
+  - `validUntil < now` → 배너 노출, 본문은 정상.
+  - `validUntil >= now` → 배너 미노출.
+  - `validUntil = null` → 배너 미노출, 콘솔 warning 1회.
+- **의존성**: T1.2, T1.6
+- **테스트 계획**:
+  - 단위 (`scripts/test/quotes-items.ts` 에 추가): 정상/만료/null 3 케이스에 `isQuoteExpired` 호출 → boolean 검증.
+  - Playwright (T2.6): 만료 시드 견적(`regression-seed-expired`)으로 접속 → `browser_snapshot()` 에 만료 배너 텍스트 포함 확인.
+- **함정·메모**: 만료여도 페이지 노출은 허용(PRD 가정). 차단은 Future(Phase 3).
 
-> **목표**: 시드 글 10편, ISR 검증, on-demand revalidate, Vercel 배포·도메인, 카피 검수.
+### Phase 1 완료 정의 (DoD)
 
-| ID | 제목 | 담당 | Size | 선행 | 산출물 | DoD | 테스트 | 함정·메모 |
-|----|------|------|------|------|--------|-----|--------|----------|
-| T3.1 | ISR 갱신 동작 검증 | qa | S | Phase 1, 2 완료 | 수동 시나리오 기록 | Notion 에서 글 1편 발행 → 60초 후 `/posts` 에서 노출 확인. `cacheLife("minutes")` 적용 페이지 모두 점검. | Playwright(네트워크)+수동 | `cacheLife("minutes")` 의 기본 stale 시간(60s)을 PRD와 일치시키되, 필요 시 명시 `cacheLife({ stale: 60, revalidate: 60, expire: 300 })` 로 튜닝. |
-| T3.2 | on-demand revalidate webhook 동작 검증 | qa | S | — | curl 호출 스크립트 | `Authorization: Bearer <secret>` 헤더로 POST → 200 응답, 본문에 `revalidated: true`. 잘못된 토큰은 401. | 통합(API) | `app/api/revalidate/route.ts` 는 이미 구현됨 — 실제 호출 + Vercel 로그로 검증. |
-| T3.3 | Make/Zapier(또는 수동) 연동 가이드 작성 | ops | S | T3.2 | `docs/REVALIDATE_INTEGRATION.md` (옵션) 또는 README 추가 섹션 | Notion DB 의 Status 변경 시 webhook 호출하는 자동화 레시피 1개. | 수동(체크리스트) | Make/Zapier 무료 플랜 한도 사전 확인. PRD에서는 "선택(권장 Future)" 으로 표기되어 있으나 운영 부담 줄이려면 W3 안에 1회 셋업 권장. |
-| T3.4 | Notion 이미지 만료 대응 검증 | qa | S | T1.6 | 시드 글 이미지 1시간 후 재검증 결과 | `next/image` 로 재호스팅된 이미지가 만료 후에도 표시. 만료 후 ISR 재생성 시 Notion에서 새 URL 받아오는 흐름 확인. | Playwright(네트워크/콘솔) | 만료된 URL 캐시 길이가 ISR 주기보다 길면 깨짐 — `cacheLife({ revalidate: 60 })` 정합성 점검. |
-| T3.5 | 시드 글 10편 완성 | copy | XL | Phase 2 완료 | Notion DB 에 Published 글 10편 | 카테고리 3종 이상(`AI강의`/`AI도구`/`실험기`)에 골고루 분포. 태그 5종 이상. 각 글 700자 이상. | 수동(체크리스트) | 운영자 병렬 작업. W2 ~ W3 사이에 분산. 초보 톤 일관 유지. |
-| T3.6 | Vercel 프로젝트 생성 + 환경변수 등록 | ops | M | T0.3 | Vercel 프로젝트 + Production/Preview 환경변수 | `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `NOTION_REVALIDATE_SECRET` 3종을 **Production** 에 등록. Preview 환경 별도 토큰 권장. | 수동 | Vercel 환경변수 UI 에서 "Sensitive" 토글. `git push` → 자동 배포 흐름 확인. |
-| T3.7 | 카피·디자인 검수 ("초보 톤") | copy/ui | M | T2.7, T2.9, T2.10, T3.5 | 카피 변경 PR | Hero 슬로건, About, Footer, 404, 빈 상태 메시지를 모두 "초보가 쓴 초보 가이드" 톤으로 통일. | 수동(동료 리뷰) | 동료 1명 이상 리뷰 권장 — 운영자 본인 시각 외 검증. |
-| T3.8 | 도메인 연결 + HTTPS 검증 | ops | M | T3.6 | 운영 도메인에서 모든 라우트 200 | 정식 도메인(미정) → DNS 설정 → Vercel 도메인 추가 → SSL 자동. `robots.txt`, `sitemap.xml`(선택) 점검. | Playwright(스모크) | 도메인 결정 미정 — W3 초반에 확정. `NEXT_PUBLIC_APP_URL` 도 운영값으로 갱신. |
-| T3.9 | Lighthouse / Core Web Vitals 점검 | qa | S | T3.8 | 측정 결과 기록 | 모바일 기준 Performance ≥ 80, Accessibility ≥ 90, SEO ≥ 90. LCP < 2.5s. | Playwright+Lighthouse CLI | 이미지 `next/image` 적용, 폰트 `font/google` 사용 시 `display: "swap"`. |
-| T3.10 | 런칭 체크리스트 통과 + 공개 | ops | S | T3.1 ~ T3.9 | "런칭 완료" 기록 (커밋 메시지 또는 docs) | 모든 DoD 충족. SNS/주변에 공유 가능 상태. | 수동(체크리스트) | 런칭 후 24h 내 첫 글 조회수·이탈률 수동 관찰 → Future 의사결정 인풋. |
+- [ ] T1.1~T1.7 모든 작업 항목 인수 조건 통과.
+- [ ] `npm run build` 통과 (Cache Components 게이트).
+- [ ] `npm run lint` 무경고.
+- [ ] `npm run test:quotes` (신규 스크립트) 모든 시나리오 통과 → `=== 결과 요약 ===` 에 fail 0.
+- [ ] 정상 시드 견적이 `/q/<slug>` 에서 데스크톱·모바일·다크모드 3종 viewport 에서 렌더 (수동 검수).
+- [ ] 만료 시드 견적에서 배너 노출.
+- [ ] 잘못된 슬러그 → 404.
+- [ ] 코드 리뷰 통과 (`code-reviewer-kr` 서브에이전트).
+- [ ] **정의된 테스트 시나리오가 모두 통과** (단위 스크립트 + 수동 viewport 검수).
 
-#### Phase 3 테스트 계획
+### Phase 1 리스크
 
-- **T3.1 ISR 갱신 — Playwright MCP(네트워크) + 수동**
-  - 사전: 운영 또는 Preview 배포 환경. 임시 글(`Status=Draft`) 준비.
-  - `mcp__playwright__browser_navigate { url: "<deploy>/posts" }` → `mcp__playwright__browser_network_requests` 로 `/posts` 응답 헤더 확인 (`x-vercel-cache` 또는 `x-nextjs-cache` 키 존재).
-  - Notion 에서 임시 글 `Status=Published` 로 전환 → 60초 대기 → 같은 URL 재방문 후 `mcp__playwright__browser_snapshot` 에 새 글 카드 존재 확인.
-  - 동일 시나리오를 `/category/[slug]`, `/tag/[slug]`, `/` 에서도 1회씩 반복.
-- **T3.2 webhook — 통합(API)**
-  - 정상: `curl -X POST -H "Authorization: Bearer $SECRET" <deploy>/api/revalidate -d '{"path":"/posts"}'` → `200`, body `{"revalidated":true,...}`.
-  - 실패 — 잘못된 토큰: `Bearer wrong` → `401`.
-  - 실패 — 헤더 누락: `Authorization` 헤더 없이 호출 → `401`.
-  - 실패 — Body 불량: 빈 body 또는 잘못된 JSON → `400` (또는 라우트 정책에 따라 안전 처리).
-  - 엣지 — 존재하지 않는 path: `/nope` → `200` 또는 `404` (라우트 결정 후 잠금). Vercel 함수 로그에 에러 없음.
-  - 결과는 `scripts/test/revalidate.sh` 또는 `.http` 파일로 저장해 재실행 가능하게 한다.
-- **T3.3** (수동 체크리스트): Make/Zapier 시나리오 활성화 후 Notion 에서 글 1편 Published 전환 → webhook 호출 로그 + 60초 이전 노출 확인.
-- **T3.4 이미지 만료 — Playwright MCP**
-  - 사전: 시드 글에 Notion 업로드 이미지 1장 포함, ISR 재생성 후 약 65분 대기 (이미지 URL 만료 후).
-  - `mcp__playwright__browser_navigate { url: "<deploy>/posts/<seed-slug>" }` → 이미지 자연 렌더.
-  - `mcp__playwright__browser_network_requests` 에서 이미지 응답이 `200` (4xx 0건).
-  - `mcp__playwright__browser_console_messages` 에서 `error` 0건.
-  - 추가: T3.2 webhook 으로 강제 revalidate → 이미지 URL이 새 expiry 로 교체되는지 동일 방식 재확인.
-- **T3.6** (수동): Vercel 대시보드에서 3종 env Production/Preview 등록 확인, 빌드 로그 성공.
-- **T3.7** (수동 동료 리뷰): 체크리스트 - Hero, About, Footer, 404, 빈 상태 메시지 톤 일관성. 동료 1명 사인오프.
-- **T3.8 도메인 스모크 — Playwright MCP**
-  - `mcp__playwright__browser_navigate` 로 `/`, `/posts`, `/posts/<seed-slug>`, `/category/<sample>`, `/tag/<sample>`, `/about`, 404 경로 각각 1회 방문.
-  - `mcp__playwright__browser_network_requests` 에서 HTML 응답 코드가 200(404 페이지만 404).
-  - `mcp__playwright__browser_evaluate { function: "() => location.protocol" }` → `"https:"`.
-- **T3.9 Lighthouse + Playwright**
-  - Lighthouse CLI(`npx lighthouse <deploy>/posts/<seed-slug> --form-factor=mobile --quiet --chrome-flags="--headless"`) 실행 → JSON 리포트.
-  - 보조: `mcp__playwright__browser_take_screenshot { filename: "lcp-mobile.png" }` 으로 LCP 시각 자료 첨부.
-  - 게이트: Performance ≥ 80, Accessibility ≥ 90, SEO ≥ 90, LCP < 2.5s.
-- **T3.10** (수동 체크리스트): Phase 1/2/3 모든 DoD 항목 + 위 테스트 통과 여부를 단일 체크리스트로 점검 후 공개.
-
-**Phase 3 완료 정의(DoD)**
-- 운영 도메인에서 `/`, `/posts`, `/posts/[slug]`, `/category/[slug]`, `/tag/[slug]`, `/about` 모두 200.
-- Notion 글 발행 → 60초 이내 또는 webhook 즉시 노출 확인.
-- 시드 글 10편 + 카테고리 3종 + 태그 5종이 실제 노출.
-- Lighthouse(모바일) 성능 ≥ 80, 접근성 ≥ 90.
-- **위 Phase 3 테스트 계획의 시나리오가 모두 통과(Playwright MCP 실측 포함). 운영 환경 스모크 + ISR/webhook 시나리오 회귀 통과.**
-
-**Phase 3 리스크**
-- ⚠️ Vercel 무료 플랜 함수 호출 한도(100k/월) — webhook 폭주 시 차단 가능. webhook 인증 토큰 누출 주의.
-- ⚠️ 도메인 결정 지연 시 T3.8 가 병목 → W3 첫날까지 도메인 결정 필수.
+- ⚠️ **R1. Notion 표 블록 API 의 children 페이지네이션** — table row 가 100개 초과 시 `start_cursor` 페이지네이션 필요. MVP 견적은 행 ≤30 가정. **완화**: T1.3 에서 `has_more` 플래그 체크 + warning. 100행 초과 시 차후 페이지네이션 추가.
+- ⚠️ **R2. `cacheTag` API 시그니처** — Next.js 16 `unstable_cacheTag` vs 정식 `cacheTag` API 검증 필요. **완화**: T1.5 작업 직전 `node_modules/next/dist/docs/` 확인 + context7 으로 최신 API 조회.
+- ⚠️ **R3. Notion v5 SDK 타입 변경** — `PageObjectResponse` 의 속성 접근 방식이 v4 와 다를 수 있음. **완화**: T1.2 에서 `isFullPage` 가드 사용, 타입 안전 페치.
 
 ---
 
-## 4. 의존성 그래프
+## Phase 2 (W2): PDF + Revalidate + SEO 차단 + E2E
+
+### 목표
+
+견적서를 PDF로 다운로드 가능하게 만들고, Notion 변경이 60초 이내에 반영되며, 검색엔진 인덱싱이 차단되고, Playwright E2E로 회귀를 잡는다.
+
+### 작업 항목
+
+#### T2.1 — `puppeteer-core` + `@sparticuz/chromium` 설치 + 로컬/Vercel 동작 검증
+
+- **추정**: M (0.5~1d) · **담당 영역**: infra · **테스트**: 수동 + 통합 (`scripts/test/pdf-spike.ts`)
+- **세부 단계**:
+  1. `npm i puppeteer-core @sparticuz/chromium` (devDeps 아님, 런타임 의존).
+     - ⚠️ 풀 `puppeteer` 절대 금지 (Vercel Function 크기 초과).
+  2. `scripts/test/pdf-spike.ts` 작성 — 로컬에서 `https://example.com` PDF 추출 1건 테스트. 로컬은 `puppeteer-core` 가 시스템 Chrome 을 찾도록 `executablePath` 분기.
+  3. Vercel Function 환경 결정: `runtime = "nodejs"` (edge 불가). `vercel.json` 또는 라우트 옵션 `export const maxDuration = 30`, `export const runtime = "nodejs"`.
+- **인수 조건**:
+  - 로컬에서 `tsx scripts/test/pdf-spike.ts` → `out/spike.pdf` 생성 (>1KB).
+  - Vercel preview 배포에서 동일 스크립트의 fetch 버전이 200 응답 + `Content-Type: application/pdf`.
+- **의존성**: 없음 (병행 가능)
+- **테스트 계획** — `scripts/test/pdf-spike.ts`:
+  - **시나리오 1 (정상)**: `puppeteer.launch({executablePath: await chromium.executablePath(), args: chromium.args, headless: chromium.headless})` → `page.goto("https://example.com")` → `page.pdf({format: "A4"})` → 파일 출력 + `console.log("size:", buffer.length)`.
+  - **시나리오 2 (실패: 잘못된 URL)**: `page.goto("https://nonexistent.invalid", {timeout: 5000})` → catch 후 명확한 에러 메시지.
+  - **시나리오 3 (엣지: 메모리)**: `process.memoryUsage()` 출력 → Vercel 1024MB 한계 대비 여유 확인.
+- **함정·메모**:
+  - ⚠️ `@sparticuz/chromium` 버전과 `puppeteer-core` 버전 호환 매트릭스 확인 필수. 보통 chromium 패키지 README 명시. context7 으로 `puppeteer-core` 최신 docs 확인.
+  - ⚠️ Vercel Function 메모리 1024MB 이상 권장. `vercel.json` 의 `functions: { "app/q/[slug]/pdf/route.ts": { memory: 1024 } }`.
+  - 로컬 macOS/Windows 는 시스템 Chrome 경로 분기 필요.
+
+#### T2.2 — 한글 폰트 임베드 (Pretendard 또는 Noto Sans KR)
+
+- **추정**: S (<2h) · **담당 영역**: ui / pdf · **테스트**: 수동 + Playwright 시각 회귀 (T2.6)
+- **세부 단계**:
+  1. Pretendard 폰트(또는 Noto Sans KR) `.woff2` 파일을 `public/fonts/` 에 추가.
+  2. `next/font/local` 로 `app/layout.tsx` 에서 임베드. `--font-pretendard` CSS 변수.
+  3. `app/globals.css` 의 `@theme inline` 블록에서 `--font-sans: var(--font-pretendard), ...` 로 설정 (Tailwind v4).
+  4. `<QuoteView>` 본문에 한글 텍스트 잘림·자간 검수.
+- **인수 조건**:
+  - 견적서 페이지의 모든 한글이 Pretendard 로 렌더 (브라우저 devtools Computed 탭 확인).
+  - 모바일/데스크톱 모두 자간·줄간 깨짐 없음.
+  - PDF 출력에서도 동일 폰트 적용 (T2.4 에서 검증).
+- **의존성**: 없음 (T2.1 과 병행 가능)
+- **테스트 계획**:
+  - 수동: 시드 견적 페이지에서 devtools 로 폰트 확인.
+  - Playwright (T2.6): `browser_take_screenshot()` 베이스라인 캡쳐.
+- **함정·메모**:
+  - 라이선스: Pretendard 는 OFL, Noto Sans KR 은 OFL. 상업 사용 가능.
+  - `next/font/local` 은 빌드 시 `display: swap` 기본. PDF 인쇄 시 폰트 로드 대기를 위해 `display: "block"` 검토.
+
+#### T2.3 — `/q/[slug]/pdf` Route Handler (헤드리스 Chromium 인쇄)
+
+- **추정**: L (1~2d) · **담당 영역**: pdf / infra · **테스트**: 단위 + 통합 (`scripts/test/pdf-route.ts`) + Playwright (T2.6)
+- **세부 단계**:
+  1. `app/q/[slug]/pdf/route.ts` 생성. `export async function GET(req, {params})`.
+  2. `params.slug` await → `getQuoteBySlug(slug)` 호출 → null 이면 404.
+  3. 자체 도메인 URL 구성: `const url = new URL(`/q/${slug}?print=1`, req.nextUrl.origin)`.
+  4. `puppeteer-core` + `@sparticuz/chromium` 으로 브라우저 launch → `page.goto(url, {waitUntil: "networkidle0"})` → `page.pdf({format: "A4", printBackground: true, margin: {top: "10mm", bottom: "10mm", left: "10mm", right: "10mm"}})`.
+  5. `<QuoteView>` 에 `print=1` 쿼리 분기 추가 (T1.6 보강): PDF 다운로드 버튼·헤더·푸터 숨김, 인쇄 전용 CSS 적용.
+  6. 응답: `Content-Type: application/pdf`, `Content-Disposition: attachment; filename*=UTF-8''${encodeURIComponent(견적서_<clientCompany>_<YYYYMMDD>.pdf)}` (RFC 5987 한글 파일명).
+  7. 실패 시(브라우저 launch 실패·timeout) 500 + 명확한 에러 메시지.
+- **인수 조건**:
+  - 시드 견적 슬러그로 `/q/<slug>/pdf` 호출 → A4 1~2장 PDF 다운로드, 한글 폰트 정상 렌더.
+  - 파일명이 `견적서_ABC주식회사_20260517.pdf` 형태 (브라우저별 다운로드 표시 확인).
+  - 잘못된 슬러그 → 404.
+  - 로컬 환경에서도 시스템 Chrome 으로 동작 (분기 처리).
+- **의존성**: T2.1, T2.2, T1.5, T1.6
+- **테스트 계획** — `scripts/test/pdf-route.ts` + Playwright (T2.6):
+  - **시나리오 1 (정상)**: 로컬 dev 서버 띄우고 `fetch("http://localhost:3000/q/<seed-slug>/pdf")` → `response.headers.get("content-type") === "application/pdf"`, `response.headers.get("content-disposition")` 에 `견적서` 포함, body 크기 >50KB.
+  - **시나리오 2 (실패: 잘못된 슬러그)**: `fetch("http://localhost:3000/q/invalid/pdf")` → 404.
+  - **시나리오 3 (실패: Draft 견적)**: Draft 시드 → 404.
+  - **시나리오 4 (엣지: 한글 파일명 인코딩)**: `Content-Disposition` 헤더 파싱해 `filename*=UTF-8''` 형식 검증, 디코딩 시 `견적서_ABC...` 일치.
+  - **시나리오 5 (엣지: 응답 시간)**: 응답 시간 측정 → 콜드스타트 포함 15초 이내 (로컬), Vercel preview 10초 이내.
+  - Playwright (T2.6): `browser_navigate('/q/<seed-slug>')` → `browser_click('PDF 다운로드')` → `browser_network_request()` 으로 응답 헤더 검증.
+- **함정·메모**:
+  - ⚠️ `params` await 필수 (Next.js 16).
+  - ⚠️ Route Handler 는 `runtime = "nodejs"`, `maxDuration = 30` 명시.
+  - ⚠️ `?print=1` 분기 시 인쇄 전용 CSS 누락하면 버튼이 PDF에 찍힘 — `<QuoteView>` 보강 단계가 핵심.
+  - ⚠️ Vercel Function 크기 제한 (압축 50MB) — `@sparticuz/chromium` 만으로 ~50MB 근접, 다른 큰 의존성 추가 자제.
+
+#### T2.4 — `/api/revalidate` Route Handler + Bearer 인증
+
+- **추정**: M (0.5~1d) · **담당 영역**: data / infra · **테스트**: 단위 + 통합 (`scripts/test/revalidate.ts`) + Playwright (T2.6)
+- **세부 단계**:
+  1. `app/api/revalidate/route.ts` 생성. `export async function POST(req)`.
+  2. 인증: `Authorization: Bearer <token>` 헤더 검증. `process.env.REVALIDATE_SECRET` 와 비교. 누락 401, 불일치 403.
+  3. body: `{slug: string}` 파싱. 누락 시 400.
+  4. `revalidateTag(`quote:${slug}`)` 호출 (Next.js 16 cache tag invalidation).
+  5. 응답: `200 {revalidated: true, slug}`.
+  6. Notion 외부 자동화(Make/Zapier) 연동 가이드를 `docs/REVALIDATE_SETUP.md` 짧게 작성 (운영자용).
+- **인수 조건**:
+  - 정상 토큰 + 유효 슬러그 → 200, 응답 후 해당 페이지가 다음 요청에서 fresh.
+  - 토큰 누락 → 401.
+  - 잘못된 토큰 → 403.
+  - body 누락 → 400.
+  - `revalidateTag` 가 실제로 호출됨 (Phase 2.6 Playwright 에서 캐시 동작 검증).
+- **의존성**: T1.5 (cacheTag 와 일치)
+- **테스트 계획** — `scripts/test/revalidate.ts`:
+  - **시나리오 1 (정상)**: `fetch(POST, {headers: {Authorization: "Bearer <secret>"}, body: JSON.stringify({slug: "<seed-slug>"})})` → 200, `revalidated: true`.
+  - **시나리오 2 (실패: 토큰 누락)**: header 없이 → 401.
+  - **시나리오 3 (실패: 잘못된 토큰)**: `Bearer wrong` → 403.
+  - **시나리오 4 (실패: body 누락)**: 빈 body → 400.
+  - **시나리오 5 (엣지: 존재하지 않는 슬러그)**: 200 응답 + `revalidated: true` (revalidateTag 는 슬러그 존재 여부와 무관, 의도된 동작).
+  - **시나리오 6 (통합: 캐시 무효화)** — Playwright (T2.6): Notion에서 시드 견적 `clientContact` 수정 → revalidate POST → 5초 후 `/q/<slug>` 재방문 → 변경 반영 확인.
+- **함정·메모**:
+  - ⚠️ `revalidateTag` 의 정확한 import 경로 확인 (Next.js 16: `next/cache` 또는 신규 위치). context7 으로 최신 API 조회.
+  - ⚠️ `REVALIDATE_SECRET` 은 강한 무작위 32자 이상. `.env.example` 에 placeholder 추가.
+
+#### T2.5 — `robots.txt` + `X-Robots-Tag` noindex 강제
+
+- **추정**: S (<2h) · **담당 영역**: seo · **테스트**: 통합 + Playwright
+- **세부 단계**:
+  1. `public/robots.txt` 생성:
+     ```
+     User-agent: *
+     Disallow: /q/
+     ```
+  2. `middleware.ts` 또는 페이지/라우트 response header 로 `X-Robots-Tag: noindex, nofollow, noarchive` 강제.
+  3. `app/q/[slug]/page.tsx` metadata 에 `robots: {index: false, follow: false}` 추가 (이중 안전망).
+- **인수 조건**:
+  - `curl -I http://localhost:3000/q/<slug>` → `x-robots-tag: noindex, nofollow, noarchive` 포함.
+  - `curl http://localhost:3000/robots.txt` → `Disallow: /q/` 포함.
+  - HTML `<head>` 에 `<meta name="robots" content="noindex,nofollow">`.
+- **의존성**: T1.5
+- **테스트 계획**:
+  - **시나리오 1 (정상)**: Playwright `browser_network_request('/q/<seed-slug>')` 응답 헤더에 `x-robots-tag` 검증.
+  - **시나리오 2 (정상)**: `browser_navigate('/robots.txt')` 후 텍스트에 `Disallow: /q/` 포함 확인.
+  - **시나리오 3 (엣지)**: `/q/<slug>/pdf` 응답에도 `x-robots-tag` 헤더가 있는지 확인 (PDF 자체가 인덱싱되면 안 됨).
+- **함정·메모**:
+  - Next.js 16 metadata API `robots` 옵션은 `<meta>` 만 생성. HTTP 헤더 강제는 middleware 가 가장 안정적.
+
+#### T2.6 — Playwright MCP E2E 시나리오 + 시드 견적 2건 정비
+
+- **추정**: L (1~2d) · **담당 영역**: qa · **테스트**: Playwright MCP (이 태스크 자체가 테스트)
+- **세부 단계**:
+  1. 시드 견적 2건 정비:
+     - `regression-seed-active`: 정상 견적 (Status=Published, ValidUntil=2027-01-01).
+     - `regression-seed-expired`: 만료 견적 (Status=Published, ValidUntil=2024-01-01).
+     - 슬러그는 실제로는 nanoid(32자) 사용하되, Notion `Title` 에 `[regression-seed-*]` 접두로 운영자가 식별 가능하게.
+  2. E2E 시나리오 작성·실행 (Playwright MCP):
+     - **시나리오 A — 정상 열람 (데스크톱)**: `browser_resize(1280, 800)` → `browser_navigate('/q/<active-slug>')` → `browser_snapshot()` 으로 발행자·고객사·합계 확인 → `browser_console_messages()` 에 에러 없음.
+     - **시나리오 B — 정상 열람 (모바일)**: `browser_resize(375, 667)` → `browser_navigate('/q/<active-slug>')` → `browser_snapshot()` 에서 항목이 카드 형태로 분해됨 확인 → 가로 스크롤 없음 (스크롤 너비 = viewport 너비).
+     - **시나리오 C — 만료 배너**: `browser_navigate('/q/<expired-slug>')` → `browser_snapshot()` 에 "유효기간이 만료" 텍스트 포함.
+     - **시나리오 D — 404**: `browser_navigate('/q/nonexistent-slug-x'.repeat(2))` → 404 페이지 확인.
+     - **시나리오 E — Status=Draft → 404**: Draft 시드 추가(또는 active 시드를 Draft로 임시 변경) → 404.
+     - **시나리오 F — noindex 헤더**: `browser_network_request('/q/<active-slug>')` → 응답 헤더 `x-robots-tag` 확인.
+     - **시나리오 G — PDF 다운로드**: `browser_navigate('/q/<active-slug>')` → `browser_click('text=PDF 다운로드')` → `browser_network_request('/q/<active-slug>/pdf')` → `content-type: application/pdf`, `content-disposition` 에 `견적서` 포함.
+     - **시나리오 H — 다크모드 시각 회귀**: `browser_navigate('/q/<active-slug>')` → 테마 토글 → `browser_take_screenshot({fullPage: true, filename: 'quote-dark.png'})` 베이스라인 저장.
+     - **시나리오 I — revalidate 통합**: Notion 에서 `clientContact` 수정 → `fetch POST /api/revalidate` (Bearer) → 5초 후 `browser_navigate('/q/<active-slug>')` → 변경 반영 확인.
+  3. 시나리오 결과를 `docs/PHASE2_E2E_REPORT.md` 에 PASS/FAIL 표로 정리.
+- **인수 조건**:
+  - 9개 시나리오(A~I) 모두 PASS.
+  - 콘솔 에러 0건 (시나리오 A 의 `browser_console_messages`).
+  - 다크모드/라이트모드 스크린샷 베이스라인 2장 저장.
+- **의존성**: T1.5, T1.6, T1.7, T2.3, T2.4, T2.5
+- **테스트 계획**: 이 태스크 자체가 테스트 작업. 실패 발견 시 해당 태스크로 회귀.
+- **함정·메모**:
+  - ⚠️ 시드 견적 입력은 운영자가 Notion UI 에서 직접 수행. 자동화 시도하지 말 것 (MVP 범위 밖).
+  - ⚠️ Playwright MCP 의 `browser_navigate` 는 prod URL 또는 `npm run dev` 로컬 둘 다 가능. CI 미설정 — 수동 실행 + 결과 리포트.
+  - ⚠️ 시나리오 I (revalidate 통합) 는 실제 Notion 수정이 필요 — 수정 후 원상복구 단계도 시나리오에 포함.
+
+#### T2.7 — Vercel 배포 + 도메인 연결 + 환경변수 등록
+
+- **추정**: M (0.5~1d) · **담당 영역**: ops · **테스트**: 수동 체크리스트
+- **세부 단계**:
+  1. Vercel 프로젝트 신규 생성, GitHub 리포지토리 연결.
+  2. 환경변수 등록: `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `REVALIDATE_SECRET`.
+  3. `vercel.json` 에 `/q/[slug]/pdf` 라우트 메모리 1024MB 설정 (T2.1 참고).
+  4. 커스텀 도메인 연결 (예: `quote.example.com`).
+  5. preview → production 승격.
+- **인수 조건**:
+  - production URL 에서 시드 견적 정상 열람.
+  - production 에서 PDF 다운로드 정상 (콜드스타트 포함 10초 이내).
+  - revalidate webhook 이 production 환경변수로 동작.
+- **의존성**: T2.3, T2.4, T2.5, T2.6
+- **테스트 계획**:
+  - 체크리스트:
+    1. preview 배포에서 시나리오 A~I 핵심 3종(A·G·I) 재실행 → PASS.
+    2. production 배포에서 동일 3종 재실행 → PASS.
+    3. PDF 응답 시간 측정 (production 콜드 1회 + 핫 3회 평균).
+- **함정·메모**:
+  - Vercel Function 메모리 1024MB 비용 확인 (Hobby 플랜 한계). 초과 시 Pro 플랜 또는 PDF 대안(window.print) 다운그레이드 검토.
+
+### Phase 2 완료 정의 (DoD)
+
+- [ ] T2.1~T2.7 모든 작업 항목 인수 조건 통과.
+- [ ] `npm run build` 통과.
+- [ ] `npm run test:quotes`, `tsx scripts/test/pdf-route.ts`, `tsx scripts/test/revalidate.ts` 모두 통과.
+- [ ] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오 모두 PASS.
+- [ ] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작.
+- [ ] `robots.txt` + `X-Robots-Tag` 검증 통과.
+- [ ] **정의된 테스트 시나리오가 모두 통과 (Playwright MCP 실측 + 단위·통합 스크립트 + 수동 production 체크리스트)**.
+
+### Phase 2 리스크
+
+- ⚠️ **R4. Vercel Function 메모리·콜드스타트** — Chromium 콜드스타트가 3초 초과 시 클라이언트 UX 손상. **완화**: T2.3 응답 시간 측정 기준 (10초) 초과 시 PDF 대안(`window.print()` + 인쇄 CSS) 다운그레이드 옵션 발동. PRD 자가검증 1번 참고.
+- ⚠️ **R5. `@sparticuz/chromium` vs `puppeteer-core` 버전 호환** — 메이저 업데이트 시 launch 실패. **완화**: T2.1 에서 패키지 정확한 버전 고정 (`^` 대신 정확 버전 또는 `~`).
+- ⚠️ **R6. Notion webhook 자동화 미연동** — Make/Zapier 설정은 운영자 책임. 미설정 시 자연 캐시 만료(5분)에 의존. **완화**: `docs/REVALIDATE_SETUP.md` 가이드 + cURL 예제 제공.
+- ⚠️ **R7. PDF 한글 파일명 브라우저 호환성** — IE/구형 브라우저 미지원. **완화**: 타겟 사용자(모던 브라우저 가정), RFC 5987 `filename*=UTF-8''` 포맷 사용.
+- ⚠️ **R8. Notion `file.url` 1시간 만료** — 견적서에 이미지 첨부 시 PDF 생성 중 만료 가능. **완화**: MVP 견적은 텍스트 위주. 이미지 첨부는 Future. `<img>` 직접 사용 금지 + `next/image` 의무화는 Phase 1 에서 enforce.
+
+---
+
+## Phase 3 (Future): 우선순위 매트릭스
+
+PRD `Future work` 10항목을 임팩트(1~5) - 노력(1~5) 점수로 정렬. 점수가 높을수록 우선. 트리거 조건은 "MVP 운영 중 어떤 신호가 보이면 다음 단계로 옮길지" 기준.
+
+| 우선순위 | 항목 | 임팩트 | 노력 | 점수 | 트리거 조건 |
+|---------|------|-------|------|------|------------|
+| 1 | **만료일 후 자동 차단 (410 응답)** | 5 | 1 | +4 | 클라이언트가 만료된 견적을 결재용으로 재사용한 사고 1건 이상 보고. URL 자체가 비밀 키이므로 만료 차단은 데이터 정합성 핵심 |
+| 2 | **클라이언트 열람 알림 (Slack/이메일)** | 4 | 2 | +2 | 운영자가 "보냈는데 봤는지 모르겠다" 피드백 3건 이상. webhook 또는 Vercel KV + cron 으로 구현 가능 |
+| 3 | **비밀번호 보호 견적 (URL + 비밀번호)** | 4 | 3 | +1 | URL 노출 사고 1건 발생 또는 운영자가 "추가 보호" 요청 |
+| 4 | **운영자 로고·브랜드 컬러 커스터마이즈** | 3 | 2 | +1 | 운영자가 2명 이상(멀티 운영자 시점) 또는 브랜딩 차별화 요청 |
+| 5 | **운영자 대시보드 (열람·다운로드 통계)** | 3 | 3 | 0 | 운영자가 클라이언트 행동 데이터로 후속 견적 전략을 짤 단계 |
+| 6 | **견적 버전 히스토리·비교** | 3 | 3 | 0 | 단가 협상이 빈번한 클라이언트가 "이전 버전과 비교" 요청 |
+| 7 | **웹 전자 서명·승인 클릭** | 4 | 5 | -1 | 사내 결재 시스템 없는 SMB 클라이언트가 다수가 될 때. 법적 효력은 별도 검토 |
+| 8 | **다국어 / 다중 통화** | 3 | 4 | -1 | 해외 클라이언트 매출 비중 20% 이상 |
+| 9 | **견적 항목 표를 child DB로 분리** | 2 | 4 | -2 | 항목 재사용이 빈번해 운영자가 매번 복붙에 지쳤다는 피드백 |
+| 10 | **멀티 테넌트 (여러 발행자가 1개 서비스)** | 5 | 5 | 0 | 본 MVP를 SaaS화 결정. 사실상 별도 제품 |
+
+> 📌 가정: 위 점수는 1인 운영자 시점의 추정. 실제 운영 데이터 누적 후 1회 재평가 권장 (Phase 2 launch 후 1개월).
+
+---
+
+## 🛣️ 크리티컬 패스 (의존성 그래프)
 
 ```
-Phase 0
-└─ T0.1 (Notion DB)
-   └─ T0.2 (Integration Token)
-      └─ T0.3 (.env.local) ──────┐
-T0.4 (server-only) ──────────────┤
-                                 │
-Phase 1 (W1)                     ▼
-T1.1 Client 인스턴스 ◀──── T0.3
-   └─ T1.2 getPosts() ◀──────────┐
-        ├─ T1.3 getPostBySlug + notion-to-md
-        ├─ T1.4 getCategories/getTags
-        ├─ T1.5 Slug 중복 검증
-        └─ T1.6 PostContent 렌더러 ◀── T1.3
-              ├─ T1.7 코드 하이라이트 CSS
-              ├─ T1.8 시드 글 2~3편
-              └─ T1.9 OG 메타 검증
-
-Phase 2 (W2)
-T1.2 ─┬─ T2.1 카테고리 검증
-      ├─ T2.2 태그 검증
-      ├─ T2.3 홈 검증
-      ├─ T2.4 검색바 ─── T2.5 검색 데이터 흐름 결정
-      └─ T2.6 추천 3개
-T2.7 About / T2.8 Header / T2.9 Footer / T2.10 404 (독립, 병렬 가능)
-
-Phase 3 (W3)
-Phase 1,2 완료 ─┬─ T3.1 ISR 검증
-                ├─ T3.2 webhook 검증 ─── T3.3 자동화 가이드
-                ├─ T3.4 이미지 만료 검증
-                └─ T3.5 시드 글 10편
-T0.3 ─ T3.6 Vercel 환경변수 ─── T3.8 도메인 ─── T3.9 Lighthouse ─── T3.10 런칭
-              ↑ T3.7 카피 검수 (T2.7/T2.9/T2.10/T3.5 의존)
+[W0 완료]
+  ↓
+T1.1 (Notion DB 시드)
+  ↓
+T1.2 (lib/quotes.ts 페치) ─┬─ T1.4 (타입, 병행)
+  ↓                        │
+T1.3 (항목 표 + 합계)        │
+  ↓                        ↓
+T1.5 (페이지 셸 + Suspense) ←┘
+  ↓
+T1.6 (QuoteView)
+  ↓
+T1.7 (만료 배너)
+  ↓
+[Phase 1 회귀]
+  ↓
+T2.1 (Chromium 설치) ─┬─ T2.2 (폰트, 병행)
+  ↓                  │
+T2.3 (PDF 라우트) ←──┘
+T2.4 (revalidate, T2.3과 병행 가능)
+T2.5 (robots, T2.3·T2.4와 병행 가능)
+  ↓
+T2.6 (E2E)
+  ↓
+T2.7 (Vercel 배포)
+  ↓
+[Phase 2 완료 = MVP launch]
 ```
 
-**크리티컬 패스**: `T0.1 → T0.2 → T0.3 → T1.1 → T1.2 → T1.3 → T1.6 → T1.8 → T3.5 → T3.6 → T3.8 → T3.10`
+**핵심 경로**: `T1.1 → T1.2 → T1.3 → T1.5 → T1.6 → T2.3 → T2.6 → T2.7`. 이 순서가 지연되면 launch 가 지연된다. T1.4/T1.7/T2.2/T2.4/T2.5 는 병행 처리해 일정 단축 가능.
 
 ---
 
-## 5. 🧪 테스트 전략
+## 🧪 테스트 전략
 
-> 이 섹션은 prd-roadmap-architect 에이전트 정의 강화(2026-05-17)에 따라 추가되었다.
-> 핵심 원칙: **"구현 직후 즉시 테스트, 모든 태스크 DoD 는 정의된 테스트 시나리오 통과를 포함한다."**
+### 전반 원칙
 
-### 5.1 전반 원칙
+- **구현 직후 즉시 테스트**: 모든 태스크는 "구현 완료" 만으로는 DoD를 만족하지 못한다. 정의된 테스트 시나리오가 통과해야 작업을 닫는다.
+- **E2E·UI는 Playwright MCP 사용**: 브라우저 동작·시각 회귀·네트워크 요청 검증은 `mcp__playwright__*` 도구로 수행.
+- **API·비즈니스 로직은 다층 테스트**: 단위(엣지 케이스·실패 경로) + 통합(실제 Notion 의존성 호출) 양쪽을 모두 정의. 모킹은 외부 비용·부작용이 있을 때만.
+- **회귀 방지**: 버그 수정 시 해당 버그를 재현하는 테스트를 먼저 작성한 뒤 수정.
+- **테스트 러너 없음 → 자기검증 스크립트 패턴**: `scripts/test/<name>.ts` + `tsx` 실행. `=== 결과 요약 ===` 출력 + `process.exitCode`. 레퍼런스: `scripts/test/notion-client.ts`. `server-only` 모듈은 직접 import 금지 → 로직 인라인 복제.
 
-1. **구현 직후 즉시 테스트**: 태스크 단위로 테스트 시나리오를 작성·실행한다. PR/커밋 단위 회귀가 아니라 태스크 단위 자가 검증이 1차 게이트.
-2. **다층 테스트**:
-   - **데이터/로직 레이어**(`lib/notion.ts`, 매핑/검증/집계): 단위 + 통합. 정상 / 실패 / 엣지 3종 시나리오를 의무화.
-   - **API 레이어**(`app/api/revalidate/route.ts` 등 Route Handler): 통합. 인증/Body/메서드/에러 코드를 전부 명시.
-   - **UI 레이어**(페이지·인터랙티브 컴포넌트): **Playwright MCP**(`mcp__playwright__*`)로 실제 브라우저 E2E.
-   - **운영 레이어**(ISR/webhook/도메인/성능): Playwright MCP + 외부 도구(Lighthouse CLI) 조합.
-3. **Playwright MCP 우선**: 별도 `@playwright/test` 러너를 도입하기 전까지 모든 UI E2E 검증은 MCP 함수 호출로 수행. 테스트 결과는 스크린샷·콘솔 로그·네트워크 캡처를 산출물로 남긴다.
-4. **러너 부재 대응**: `npm test` 가 미설정이므로 단위/통합 검증은 (a) `npm run build` 가 잡아주는 타입/Suspense 에러, (b) `tsx scripts/test/<name>.ts` 형태의 임시 검증 스크립트, (c) 콘솔 출력 + 수동 어서션 중 적합한 방식을 태스크별로 선택한다.
-5. **회귀 방지**: Phase 가 종료될 때마다 직전 Phase 의 핵심 E2E 시나리오를 1회 재실행한다(특히 Phase 2 종료 시 Phase 1 의 T1.6/T1.9, Phase 3 종료 시 Phase 2 의 T2.1/T2.4 회귀).
-6. **테스트 데이터 분리**: 시드 글 중 최소 1편은 "회귀 전용"으로 표시(예: Notion 페이지 제목에 `[regression-seed]` 접두). 운영 카피 수정 시 영향 없는 데이터로 유지.
-7. **민감 정보 보호**: Playwright 시나리오 스크린샷에 토큰·env 노출 금지. 네트워크 캡처 저장 시 `Authorization` 헤더 마스킹.
+### Phase별 검증 매트릭스
 
-### 5.2 Phase별 핵심 테스트 시나리오 매트릭스
+| Phase | 핵심 검증 대상 | 1차 도구 | 2차 도구 |
+|-------|--------------|---------|---------|
+| Phase 0 (W0) | 빌드·lint·라우트 정리 | `npm run build` + `npm run lint` | 수동 |
+| Phase 1 (W1) | `lib/quotes.ts` 페치 + 항목 파싱 + 합계 | `tsx scripts/test/quotes-client.ts` + `quotes-items.ts` | 수동 viewport 검수 |
+| Phase 1 (W1) | `/q/[slug]` 렌더 + 모바일 | 수동 dev server | Playwright (T2.6 통합) |
+| Phase 2 (W2) | PDF 라우트 | `tsx scripts/test/pdf-route.ts` + Playwright `browser_network_request` | 수동 production 검수 |
+| Phase 2 (W2) | revalidate webhook | `tsx scripts/test/revalidate.ts` | Playwright 통합 (T2.6 시나리오 I) |
+| Phase 2 (W2) | robots/noindex | Playwright `browser_network_request` + curl | metadata 검증 |
+| Phase 2 (W2) | E2E 회귀 | **Playwright MCP** (시나리오 A~I) | 베이스라인 스크린샷 |
 
-| Phase | 핵심 검증 대상 | 단위 | 통합 | Playwright E2E | 수동 |
-|-------|---------------|------|------|----------------|------|
-| 0 | 환경 변수, `server-only` 가드 | — | T0.4(빌드) | — | T0.1, T0.2, T0.3 |
-| 1 | Notion 페치 레이어, 마크다운 렌더링, OG | T1.2, T1.4, T1.5 | T1.1, T1.3 | T1.6, T1.7, T1.9 | T1.8 |
-| 2 | 발견성(카테고리/태그/검색/추천/네비) | — | T2.5 | T2.1, T2.2, T2.3, T2.4, T2.6, T2.8, T2.10 | T2.7, T2.9 |
-| 3 | ISR, webhook, 이미지 만료, 도메인, 성능 | — | T3.2 | T3.1(네트워크), T3.4, T3.8, T3.9 | T3.3, T3.5, T3.6, T3.7, T3.10 |
+### Playwright MCP 함수 베이스라인
 
-### 5.3 Playwright MCP 사용 베이스라인
+이 프로젝트의 모든 UI E2E 는 다음 함수로 작성한다:
 
-> 모든 E2E 시나리오는 **로컬 `npm run dev` 또는 Vercel Preview/Production URL** 을 대상으로 실행한다. 시나리오는 짧고 결정적으로(데이터·환경 가정 명시).
+- `mcp__playwright__browser_navigate(url)` — 페이지 이동
+- `mcp__playwright__browser_snapshot()` — ARIA 트리 기반 상태 확인 (셀렉터보다 우선)
+- `mcp__playwright__browser_click({element, ref})` / `browser_fill_form` / `browser_type` — 인터랙션
+- `mcp__playwright__browser_network_request(url)` / `browser_network_requests()` — Route Handler·API 응답 헤더 검증
+- `mcp__playwright__browser_take_screenshot({fullPage, filename})` — 다크모드·시각 회귀
+- `mcp__playwright__browser_console_messages()` — 클라이언트 에러 감지
+- `mcp__playwright__browser_resize(width, height)` — 모바일/데스크톱 viewport 전환
+- `mcp__playwright__browser_evaluate({function})` — 커스텀 어서션 (예: `getComputedStyle` 폰트 확인)
 
-표준 실행 흐름:
+### 시드 견적 정책
 
-1. **사전 준비**
-   - 로컬 검증: `npm run dev` 로 dev 서버 기동 후 `http://localhost:3000` 대상.
-   - 배포 검증(T3.x): Vercel Preview/Production URL 사용.
-   - 시드 데이터: 회귀 전용 글 1편이 `Published` 상태인지 사전 확인.
-2. **페이지 진입**: `mcp__playwright__browser_navigate { url: "<base>/<path>" }`.
-3. **ARIA 트리 스냅샷**: `mcp__playwright__browser_snapshot` → 헤딩/링크/버튼/리전이 기대대로 존재하는지 1차 확인. 셀렉터 없이도 의미 구조를 잡을 수 있다.
-4. **인터랙션**:
-   - 클릭: `mcp__playwright__browser_click { ref: <snapshot ref>, element: "<설명>" }`.
-   - 타이핑: `mcp__playwright__browser_type { ref, text, submit?: true }`.
-   - 폼 다건: `mcp__playwright__browser_fill_form { fields: [...] }`.
-   - 키보드: `mcp__playwright__browser_press_key { key: "Enter" }`.
-5. **상태 확인**:
-   - DOM/JS 어서션: `mcp__playwright__browser_evaluate { function: "() => /* boolean·number·string */" }` (간결한 단일 식).
-   - 네트워크 검증: `mcp__playwright__browser_network_requests` 또는 단건 `mcp__playwright__browser_network_request` → 응답 코드/헤더(`x-vercel-cache`, `x-nextjs-cache`, `content-type`) 확인.
-   - 콘솔 검증: `mcp__playwright__browser_console_messages` → `error`/`warning` 0건 게이트.
-6. **시각 회귀**: `mcp__playwright__browser_take_screenshot { filename, fullPage?: true }` → 라이트/다크, 모바일/데스크톱 사이즈별로 저장. 파일명 컨벤션 `t<phase>-<task>-<variant>.png`.
-7. **반응형 검증**: `mcp__playwright__browser_resize { width, height }` 로 모바일(375×812) ↔ 데스크톱(1280×800) 전환 후 재스냅샷.
-8. **정리**: 작업 후 다른 시나리오에 영향이 갈 수 있으면 `mcp__playwright__browser_close`. 시드 데이터 변경(예: Draft 토글) 시 반드시 원복.
-
-자주 쓰는 어서션 패턴 예시:
-
-```text
-# 카드 수
-mcp__playwright__browser_evaluate { function: "() => document.querySelectorAll('[data-testid=\"post-card\"]').length" }
-
-# 다크모드 적용
-mcp__playwright__browser_evaluate { function: "() => document.documentElement.classList.contains('dark')" }
-
-# 이미지 4xx 0건
-mcp__playwright__browser_network_requests
-→ 응답 중 contentType 이미지 + status >= 400 필터링 후 길이 0
-```
-
-`data-testid` 가 없으면 우선 ARIA 셀렉터(역할·이름)로 충분히 잡을 수 있다. UI 컴포넌트에 안정적 셀렉터가 필요하면 PR 시 `data-testid` 를 함께 추가한다.
+- 최소 2건 유지: `regression-seed-active` (정상, ValidUntil 미래), `regression-seed-expired` (만료, ValidUntil 과거).
+- 슬러그는 실제 nanoid(32자) 사용. 식별은 Notion `Title` 의 `[regression-seed-*]` 접두로.
+- 시드 수정은 운영자가 Notion UI 에서 수행. 자동화 금지.
+- Playwright 시나리오는 항상 시드 우선 사용 (임시 견적은 불안정).
 
 ---
 
-## 6. 리스크 & 대응
+## 📊 마일스톤 & 지표
 
-| # | 리스크 | 영향 | 가능성 | 대응 |
-|---|--------|------|--------|------|
-| R1 | Notion 일부 블록(synced block, 복잡한 embed) 변환 한계 (PRD 단점) | 본문 일부 누락 | 중 | 시드 글 작성 시 사용 가능한 블록 화이트리스트 운영자 가이드 작성. 미지원 블록은 코드/이미지로 대체. |
-| R2 | 초기 글 수 부족 → 검색 결과 빈약 → 이탈 (PRD 불만족 가설) | 첫 인상 악화 | 중 | T3.5 시드 글 10편 + 카테고리/태그 칩으로 발견성 강화. 빈 검색 결과에 "전체 글 보기" 폴백 CTA. |
-| R3 | Notion 이미지 1시간 만료 → 캐시 만료 후 이미지 깨짐 | 본문 가독성 | 중 | `next/image` 재호스팅 + ISR 60초 정합성 검증(T3.4). 만료 검출 시 백오피스 알림은 Future. |
-| R4 | `cacheComponents: true` 환경에서 페치 위치 실수 → 빌드 실패 | 빌드 중단 | 높 | 모든 동적 라우트는 `app/posts/[slug]/page.tsx` 패턴(정적 셸 + `<Suspense>` 안 데이터 컴포넌트)을 복제. 코드 리뷰 체크리스트에 추가. |
-| R5 | shadcn/ui (`@base-ui/react`) 와 기존 Radix 기반 자료 충돌 | 폼/검색 UI 구현 지연 | 중 | 새 UI 도입 전 `components/ui/*.tsx` 실제 props 확인. `npx shadcn@latest add` 로만 추가. |
-| R6 | NOTION_TOKEN 클라이언트 번들 노출 | 보안 사고 | 낮(가드 있음) | T0.4 `server-only` import + 코드 리뷰 시 클라이언트 컴포넌트의 `lib/notion` import 금지. |
-| R7 | Vercel 빌드 시간 초과 (글 수 증가) | 배포 지연 | 낮 | ISR 사용으로 빌드 시 SSG 부담 낮음. 글 100건 초과 시 build 시 prebuild 글 수 제한 검토. |
-| R8 | 도메인 미확정으로 W3 후반 일정 압박 | 런칭 지연 | 중 | W3 1일차(2026-05-31) 까지 도메인 결정. 임시 `*.vercel.app` 으로 우선 공개도 옵션. |
+| 마일스톤 | 시점 | 측정 지표 | 목표 |
+|---------|------|----------|------|
+| Phase 1 완료 | W1 종료 | `npm run build` 통과, `npm run test:quotes` 통과, 시드 견적 데스크톱·모바일 렌더 PASS | 100% |
+| Phase 2 PDF | T2.3 완료 | PDF 응답 시간(로컬) | 콜드 15s, 핫 5s 이내 |
+| Phase 2 E2E | T2.6 완료 | Playwright 시나리오 A~I PASS율 | 9/9 (100%) |
+| Phase 2 production | T2.7 완료 | production PDF 응답 시간 | 콜드 10s, 핫 3s 이내 |
+| MVP launch | W2 종료 | 운영자가 견적 1건 5분 안에 발행 → 클라이언트가 PDF 다운로드 성공 | 1회 시연 성공 |
 
 ---
 
-## 7. Future Work 우선순위
+## 🔗 의존성 맵
 
-PRD Future 항목을 **사용자 가치(임팩트) × 구현 비용(노력)** 으로 점수화. 점수 = 임팩트(1~5) - 노력(1~5)(높을수록 우선).
+### 외부 의존성
 
-| 우선순위 | 항목 | 임팩트 | 노력 | 점수 | 트리거 조건 | 비고 |
-|---------|------|--------|------|------|------------|------|
-| 1 | **RSS / Atom 피드** | 4 | 1 | +3 | 런칭 직후 (구독자 확보) | `app/feed.xml/route.ts` 1파일로 가능. SEO·구독성 동시 확보. |
-| 2 | **OG 이미지 자동 생성** | 4 | 2 | +2 | SNS 유입 시도 시점 | `@vercel/og` 활용. 글별 동적 OG. |
-| 3 | **댓글 (Giscus)** | 4 | 2 | +2 | 글 20편 이상 + 첫 독자 피드백 도착 시점 | GitHub Discussions 기반. 무료. |
-| 4 | **조회수·좋아요 (Vercel KV)** | 3 | 2 | +1 | "어떤 글이 끝까지 읽히는가" 데이터 필요 시점 | 만족 가설 검증 도구. Vercel KV 또는 Upstash. |
-| 5 | **시리즈/강의 그룹** | 4 | 3 | +1 | 연재성 글 3편 이상 묶일 때 | Notion DB 에 `Series` select 추가. 새 라우트 `/series/[slug]`. |
-| 6 | **뉴스레터 구독** | 3 | 3 | 0 | 정기 독자 50명 이상 확보 시 | Buttondown/Substack 임베드부터 시작 권장. |
-| 7 | **서버사이드 검색 (Algolia/Meilisearch)** | 3 | 4 | -1 | 글 100편 초과 시 자동 트리거 | T2.5 결정 재검토 신호. 비용 발생. |
-| 8 | **다국어 지원** | 3 | 5 | -2 | 해외 트래픽 검증된 후 | next-intl 도입. 콘텐츠 번역 운영비용 큼. |
+- **Notion API** (`@notionhq/client` v5) — `databases.retrieve` → `dataSources.query` 2단계. T1.2/T1.3/T2.4 에 의존.
+- **Vercel** — Function 메모리 1024MB, `nodejs` runtime. T2.3/T2.7 에 의존.
+- **`@sparticuz/chromium` + `puppeteer-core`** — PDF 생성. T2.3 에 의존. ⚠️ 패키지 버전 매트릭스 확인 필수.
+- **Pretendard (또는 Noto Sans KR)** — 한글 폰트. T2.2 에 의존.
+- **Make/Zapier (선택)** — Notion 변경 webhook 트리거. T2.4 운영자 측 설정.
 
----
+### 신규 npm 의존성 (설치 시점)
 
-## 8. 참고 링크
+| 패키지 | 버전 정책 | 설치 시점 | 용도 |
+|--------|---------|----------|------|
+| `nanoid` (선택) | latest | T1.1 직전 (운영자가 Notion Formula 대신 nanoid 선택 시) | slug 생성 |
+| `puppeteer-core` | 정확 버전 고정 | T2.1 시작 시 | PDF 헤드리스 |
+| `@sparticuz/chromium` | 정확 버전 고정 (`puppeteer-core` 호환 확인) | T2.1 시작 시 | Vercel Function용 Chromium |
 
-- [`docs/NOTION_BLOG_PRD.md`](./NOTION_BLOG_PRD.md) — 단일 출처(SSOT). 우선순위/기능 명세/DataTable.
-- [`CLAUDE.md`](../CLAUDE.md) — Next.js 16·Cache Components·shadcn(`@base-ui/react`) 규칙, 명령어, 함정 노트.
-- [`AGENTS.md`](../AGENTS.md) — "This is NOT the Next.js you know" 경고 + 새 API 학습 시 `node_modules/next/dist/docs/` 참조.
-- [`README.md`](../README.md) — 외부 독자용 프로젝트 소개.
-- [`docs/HOOKS_PLANNING.md`](./HOOKS_PLANNING.md) — Slack 알림·Claude Hook 시스템 (운영 자동화 관련).
-- [`BUG_REPORT.md`](../BUG_REPORT.md) — 스타터킷 시절 이슈 (신규 이슈는 append 권장).
-- [`.env.example`](../.env.example) — 환경변수 템플릿.
+> 📌 가정: 위 외 모든 의존성은 W0 초기화 시점에 이미 설치됨. 추가 라이브러리(예: `fuse.js`, `algoliasearch`)는 MVP 범위 밖.
 
 ---
 
-## 9. 변경 이력
+## ⚠️ 리스크 레지스터
 
-| 날짜 | 작성자 | 변경 내용 |
-|------|--------|----------|
-| 2026-05-17 | prd-roadmap-architect | 초기 로드맵 작성 (W1~W3, 총 32 태스크). PRD v1(2026-05-16) 기반. |
-| 2026-05-17 | prd-roadmap-architect | 테스트 전략 섹션 및 태스크별 테스트 계획 추가 (Playwright MCP 베이스라인 정립). |
+| ID | 리스크 | 영향 | 발생 가능성 | 완화 전략 | 책임 Phase |
+|----|-------|------|----------|---------|----------|
+| R1 | Notion 표 row 100개 초과 | 항목 일부 누락 | 낮음 | T1.3 에서 `has_more` 체크 + warning | Phase 1 |
+| R2 | Next.js 16 `cacheTag` API 시그니처 변경 | 캐시 무효화 실패 | 중간 | T1.5 작업 직전 context7 + `node_modules/next/dist/docs/` 확인 | Phase 1 |
+| R3 | Notion v5 SDK 타입 변경 | 빌드/런타임 실패 | 중간 | `isFullPage` 가드, `scripts/test/notion-client.ts` 패턴 준수 | Phase 1 |
+| R4 | Vercel Function 콜드스타트 >10s | PDF UX 손상 | 중간 | T2.3 측정 후 한계 초과 시 `window.print()` 다운그레이드 | Phase 2 |
+| R5 | `chromium`/`puppeteer-core` 버전 호환 불일치 | PDF launch 실패 | 중간 | T2.1 정확 버전 고정 + CHANGELOG 확인 | Phase 2 |
+| R6 | Notion webhook 자동화 미연동 | 즉시 갱신 안 됨 | 높음 | `docs/REVALIDATE_SETUP.md` 가이드, 자연 캐시(5분) fallback | Phase 2 |
+| R7 | PDF 한글 파일명 브라우저 호환성 | 다운로드 파일명 깨짐 | 낮음 | RFC 5987 `filename*=UTF-8''` 사용, 타겟 = 모던 브라우저 가정 | Phase 2 |
+| R8 | Notion `file.url` 1시간 만료 | 이미지 깨짐 | 낮음 (MVP는 텍스트 위주) | `<img>` 금지 + `next/image` 의무화. 이미지는 Future | Phase 1 |
+| R9 | 운영자가 슬러그를 32자 미만으로 입력 | URL 보안 약화 | 중간 | T1.2 페치 단계에서 형식 검증 → 404 (PRD 정합성 규칙 3) | Phase 1 |
+| R10 | 중복 slug 시 빌드 실패가 너무 강함 | 잘못된 견적 1건 때문에 전체 차단 | 낮음 | PRD 정합성 규칙 1 의도된 동작 — 데이터 손상 신호로 즉시 운영자에게 알림 | Phase 1 |
+
+---
+
+## 🤔 결정 필요 항목 (PRD 자가검증 5종 — 사용자 확정 대기)
+
+본 로드맵은 PRD 의 "기본안" 을 채택했지만, 운영자가 다음 5종 결정을 확정해야 일부 태스크가 최종 형태를 갖는다. ⚠️ 표시.
+
+1. ⚠️ **PDF 생성 방식**: 기본안 = `@sparticuz/chromium` + `puppeteer-core`. 대안 = `window.print()` + 인쇄 전용 CSS.
+   - **영향 태스크**: T2.1, T2.3.
+   - **결정 기준**: Vercel Function 비용·콜드스타트 부담 vs 결과 일관성.
+2. ⚠️ **slug 생성 주체**: 기본안 = 운영자가 Notion 에 수동 nanoid(32자) 붙여넣기. 대안 = Notion `Formula` 자동 생성, 또는 Make/Zapier 보조.
+   - **영향 태스크**: T1.1, T1.2.
+   - **결정 기준**: 운영자 워크플로 단순성 vs Notion Formula 학습 부담.
+3. ⚠️ **항목 표 위치**: 기본안 = Notion page body 첫 `table` 블록. 대안 = child DB 분리.
+   - **영향 태스크**: T1.3.
+   - **결정 기준**: MVP 단순성 vs 항목 재사용성.
+4. ⚠️ **부가세 기본값**: 기본안 = 10%. 대안 = 0%(면세사업자) 또는 운영자별 디폴트.
+   - **영향 태스크**: T1.3.
+   - **결정 기준**: 운영자 사업 형태.
+5. ⚠️ **만료 견적 정책**: 기본안 = 열람 허용 + 배너 표시. 대안 = 410 차단을 P0 로 승격.
+   - **영향 태스크**: T1.7. Phase 3 의 1순위(자동 차단)를 MVP로 끌어올리는 결정.
+   - **결정 기준**: 결재용 정합성 사고 위험도.
+
+---
+
+## 📝 변경 이력
+
+| 일자 | 변경 | 작성자 |
+|------|------|-------|
+| 2026-05-17 | 견적서 도메인 기준 신규 작성 (블로그 로드맵은 `docs/archive/ROADMAP.md` 로 이동) | prd-roadmap-architect |
