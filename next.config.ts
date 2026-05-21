@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
   // externalize 하면 패키지가 함수의 node_modules 에 통째로 복사돼 bin 이 그대로 유지된다.
   // (puppeteer-core 도 함께 외부화 — 동일 launch 의존성.) 키는 Next 16 안정 export(구 serverComponentsExternalPackages 아님).
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  // ⚠️ serverExternalPackages 만으론 부족(8d4bac1 배포 실측: 여전히 "bin does not exist").
+  // @sparticuz/chromium 의 압축 크롬 바이너리(bin/*.br)는 런타임에 fs 로 읽혀 nft 트레이스에
+  // 안 잡힌다 → /q/[slug]/pdf 함수에 강제 포함시킨다. 키는 route 글로브(picomatch, 동적
+  // 세그먼트 [slug]는 * 로 매칭), 값은 프로젝트 루트 기준 글로브. (Next 16 docs: output.md)
+  outputFileTracingIncludes: {
+    "/q/*/pdf": ["./node_modules/@sparticuz/chromium/bin/**/*"],
+  },
   images: {
     // Notion file 속성의 `file.url`은 1시간 후 만료되므로 next/image 로 재호스팅한다.
     // 스키마 출처: https://github.com/vercel/next.js/blob/canary/docs/01-app/01-getting-started/12-images.mdx
