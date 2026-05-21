@@ -272,7 +272,9 @@
 
 ### 작업 항목
 
-#### T2.1 — `puppeteer-core` + `@sparticuz/chromium` 설치 + 로컬/Vercel 동작 검증
+#### ✅ T2.1 — `puppeteer-core` + `@sparticuz/chromium` 설치 + 로컬/Vercel 동작 검증
+
+> ✅ **완료 (2026-05-21)**: `puppeteer-core@24.43.1` + `@sparticuz/chromium@148`(호환 버전 핀, R5 완화) 런타임 설치. `scripts/test/pdf-spike.ts` 3/3(로컬 Windows 시스템 Chrome 분기 → `out/spike.pdf` 19KB). launch 환경 분기는 `lib/pdf-browser.ts` 로 공유. `vercel.json` 에 PDF 라우트 `memory:1024/maxDuration:30`. ⚠️ 로컬은 시스템 Chrome 으로만 검증 — 서버리스(@sparticuz) executablePath 경로는 T2.7 배포 시 실측 필요.
 
 - **추정**: M (0.5~1d) · **담당 영역**: infra · **테스트**: 수동 + 통합 (`scripts/test/pdf-spike.ts`)
 - **세부 단계**:
@@ -293,7 +295,9 @@
   - ⚠️ Vercel Function 메모리 1024MB 이상 권장. `vercel.json` 의 `functions: { "app/q/[slug]/pdf/route.ts": { memory: 1024 } }`.
   - 로컬 macOS/Windows 는 시스템 Chrome 경로 분기 필요.
 
-#### T2.2 — 한글 폰트 임베드 (Pretendard 또는 Noto Sans KR)
+#### ✅ T2.2 — 한글 폰트 임베드 (Pretendard 또는 Noto Sans KR)
+
+> ✅ **완료 (2026-05-21)**: `public/fonts/PretendardVariable.woff2`(OFL) 를 `next/font/local` 로 `app/layout.tsx` 에 임베드 → `--font-pretendard`. `app/globals.css` `@theme inline` 의 `--font-sans` 1순위로 설정(Geist 폴백 유지). PDF 인쇄 시 폰트 보장 위해 `display:"block"` + 라우트 `waitUntil:"networkidle0"`. 전 사이트(랜딩 포함) 적용.
 
 - **추정**: S (<2h) · **담당 영역**: ui / pdf · **테스트**: 수동 + Playwright 시각 회귀 (T2.6)
 - **세부 단계**:
@@ -313,7 +317,9 @@
   - 라이선스: Pretendard 는 OFL, Noto Sans KR 은 OFL. 상업 사용 가능.
   - `next/font/local` 은 빌드 시 `display: swap` 기본. PDF 인쇄 시 폰트 로드 대기를 위해 `display: "block"` 검토.
 
-#### T2.3 — `/q/[slug]/pdf` Route Handler (헤드리스 Chromium 인쇄)
+#### ✅ T2.3 — `/q/[slug]/pdf` Route Handler (헤드리스 Chromium 인쇄)
+
+> ✅ **완료 (2026-05-21)**: `app/q/[slug]/pdf/route.ts` — `await params` → `getQuoteBySlug`(null→404) → 자체 origin `/q/${slug}?print=1` 헤드리스 인쇄 → `application/pdf`. `finally` 에서 `browser.close()`. RFC 5987 한글 파일명(`견적서_<고객사>_<YYYYMMDD>.pdf`). UI 크롬 숨김은 `print:hidden`(puppeteer 가 print 미디어 에뮬). `scripts/test/pdf-route.ts` 5/5(정상 PDF 188KB·404·한글파일명·응답시간; Draft 시드 부재로 Draft 시나리오는 미존재 slug 404 로 대체). ⚠️ `cacheComponents:true` 충돌로 `runtime` export 미사용(기본 nodejs). 코드리뷰 quick fix C2(500 내부메시지 비노출)·M4(로컬 비-Linux `--no-sandbox` 제거)·S3(print 배너 정리) 반영.
 
 - **추정**: L (1~2d) · **담당 영역**: pdf / infra · **테스트**: 단위 + 통합 (`scripts/test/pdf-route.ts`) + Playwright (T2.6)
 - **세부 단계**:
@@ -343,7 +349,9 @@
   - ⚠️ `?print=1` 분기 시 인쇄 전용 CSS 누락하면 버튼이 PDF에 찍힘 — `<QuoteView>` 보강 단계가 핵심.
   - ⚠️ Vercel Function 크기 제한 (압축 50MB) — `@sparticuz/chromium` 만으로 ~50MB 근접, 다른 큰 의존성 추가 자제.
 
-#### T2.4 — `/api/revalidate` Route Handler + Bearer 인증
+#### ✅ T2.4 — `/api/revalidate` Route Handler + Bearer 인증
+
+> ✅ **완료 (2026-05-21)**: `app/api/revalidate/route.ts` — `Authorization: Bearer <NOTION_REVALIDATE_SECRET>`(헤더 누락 401·불일치 403·secret 미설정 500), body `{slug}`(누락/빈/JSON깨짐 400), `revalidateTag(\`quote:${slug}\`, {expire:0})`(webhook 즉시만료 패턴) → 200 `{revalidated,slug}`. 운영자 가이드 `docs/REVALIDATE_SETUP.md`. `scripts/test/revalidate.ts` 9/9. ⚠️ 시크릿 변수명은 SSOT `NOTION_REVALIDATE_SECRET`(본 문서 구표기 `REVALIDATE_SECRET` 아님). 코드리뷰 quick fix C1(`crypto.timingSafeEqual` 타이밍 안전 비교) 반영. 시나리오6(Notion 수정→반영 통합)은 T2.6 이연.
 
 - **추정**: M (0.5~1d) · **담당 영역**: data / infra · **테스트**: 단위 + 통합 (`scripts/test/revalidate.ts`) + Playwright (T2.6)
 - **세부 단계**:
@@ -371,7 +379,9 @@
   - ⚠️ `revalidateTag` 의 정확한 import 경로 확인 (Next.js 16: `next/cache` 또는 신규 위치). context7 으로 최신 API 조회.
   - ⚠️ `REVALIDATE_SECRET` 은 강한 무작위 32자 이상. `.env.example` 에 placeholder 추가.
 
-#### T2.5 — `robots.txt` + `X-Robots-Tag` noindex 강제
+#### ✅ T2.5 — `robots.txt` + `X-Robots-Tag` noindex 강제
+
+> ✅ **완료 (2026-05-21)**: `public/robots.txt`(`Disallow: /q/`) 추가. `X-Robots-Tag: noindex, nofollow, noarchive` 는 `proxy.ts` 의 `/q/:path*` matcher 가 견적 페이지·`/q/[slug]/pdf` 응답 모두에 강제(T1.5 부터), `app/q/[slug]/page.tsx generateMetadata` 가 `robots:{index:false}` meta 이중망. 검증: `/robots.txt` Disallow + `/q/<slug>`·`/q/<slug>/pdf` 헤더 모두 확인. (헤더/meta 는 기존 구현, 본 태스크는 robots.txt + 검증.)
 
 - **추정**: S (<2h) · **담당 영역**: seo · **테스트**: 통합 + Playwright
 - **세부 단계**:
@@ -429,8 +439,8 @@
 - **추정**: M (0.5~1d) · **담당 영역**: ops · **테스트**: 수동 체크리스트
 - **세부 단계**:
   1. Vercel 프로젝트 신규 생성, GitHub 리포지토리 연결.
-  2. 환경변수 등록: `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `REVALIDATE_SECRET`.
-  3. `vercel.json` 에 `/q/[slug]/pdf` 라우트 메모리 1024MB 설정 (T2.1 참고).
+  2. 환경변수 등록: `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `NOTION_ITEMS_DATABASE_ID`, `NOTION_REVALIDATE_SECRET`. *(시크릿 변수명은 SSOT 기준 `NOTION_REVALIDATE_SECRET`)*
+  3. `vercel.json` 에 `/q/[slug]/pdf` 라우트 메모리 1024MB 설정 — ✅ T2.1 에서 추가 완료(`functions` memory:1024/maxDuration:30).
   4. 커스텀 도메인 연결 (예: `quote.example.com`).
   5. preview → production 승격.
 - **인수 조건**:
@@ -448,12 +458,12 @@
 
 ### Phase 2 완료 정의 (DoD)
 
-- [ ] T2.1~T2.7 모든 작업 항목 인수 조건 통과.
-- [ ] `npm run build` 통과.
-- [ ] `npm run test:quotes`, `tsx scripts/test/pdf-route.ts`, `tsx scripts/test/revalidate.ts` 모두 통과.
-- [ ] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오 모두 PASS.
-- [ ] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작.
-- [ ] `robots.txt` + `X-Robots-Tag` 검증 통과.
+- [ ] T2.1~T2.7 모든 작업 항목 인수 조건 통과. *(T2.1~T2.5 ✅ 2026-05-21 / T2.6 E2E·T2.7 배포 잔여)*
+- [x] `npm run build` 통과. *(2026-05-21: `/` Static · `/q/[slug]` PPR · `/q/[slug]/pdf`·`/api/revalidate` ƒ)*
+- [x] `npm run test:quotes`, `tsx scripts/test/pdf-route.ts`, `tsx scripts/test/revalidate.ts` 모두 통과. *(test:quotes 10/10 · pdf-route 5/5 · revalidate 9/9)*
+- [ ] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오 모두 PASS. *(T2.6 잔여)*
+- [ ] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작. *(T2.7 잔여)*
+- [x] `robots.txt` + `X-Robots-Tag` 검증 통과. *(T2.5 — robots.txt Disallow + proxy.ts 헤더 + meta)*
 - [ ] **정의된 테스트 시나리오가 모두 통과 (Playwright MCP 실측 + 단위·통합 스크립트 + 수동 production 체크리스트)**.
 
 ### Phase 2 리스크
@@ -649,3 +659,4 @@ T2.7 (Vercel 배포)
 | 2026-05-21 | T1.7 완료 (`isQuoteExpired` 헬퍼 + `quote-data.tsx` 배선 + 만료 단위 3종). `test:quotes` 10/10·build 통과. Phase 1 잔여=code-reviewer-kr 리뷰 | quote-viewer-builder |
 | 2026-05-21 | code-reviewer-kr 리뷰 quick fix(C1·M4·M5·S1) 반영. **T1.8(랜딩 `/` 정식화) 신규 추가** — PRD IA 에 있으나 ROADMAP 누락이던 메인 페이지 | code-reviewer-kr / 사용자 요청 |
 | 2026-05-21 | **T1.8 완료** — `app/page.tsx` 정식 랜딩 검증(build `/` `○ Static`·tsc·lint·Playwright 데스크톱/모바일/다크 3종·콘솔 0). W1 종료, 다음 W2 | quote-ui-designer |
+| 2026-05-21 | **T2.1~T2.5 완료** — puppeteer-core+@sparticuz/chromium 설치·pdf-spike / Pretendard 폰트 / `/q/[slug]/pdf` PDF 라우트 / `/api/revalidate` Bearer webhook / robots.txt. tsc·lint·build 통과, test:quotes 10/10·pdf-route 5/5·revalidate 9/9. code-reviewer-kr quick fix C1(타이밍 안전 비교)·C2(에러 비노출)·M4(샌드박스)·S3 반영. 잔여 W2=T2.6(E2E)·T2.7(배포) | quote-viewer-builder / code-reviewer-kr |

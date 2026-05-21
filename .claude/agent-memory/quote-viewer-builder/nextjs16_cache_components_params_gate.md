@@ -31,4 +31,17 @@ codemod: `npx @next/codemod@canary middleware-to-proxy .`
 **4. notFound() + "use cache" 양립**
 `notFound()` 는 `NEXT_HTTP_ERROR_FALLBACK;404` throw(control-flow)라 cache 컴포넌트 안에서 호출 가능. cacheLife 문서의 조건부 분기 예시(`if(!post){cacheLife('minutes');return null}`)와 동일 패턴. 형식 위반/미공개 slug → 404 UI(`app/not-found.tsx`) 정상 렌더(dev 에서 문서는 200 + 스트리밍 not-found body).
 
-관련: [[notion_slug_formula_filter_trap]]
+**5. ⚠️ `export const runtime` 은 cacheComponents 와 충돌 (T2.3 실측, 2026-05-21)**
+Route Handler(또는 page/layout)에 `export const runtime = "nodejs"` 를 두면 dev/build 가 `Route segment config "runtime" is not compatible with nextConfig.cacheComponents. Please remove it.` 로 즉시 실패(ECMAScript 컴파일 에러 → 그 라우트 전체 500, 404 분기조차 도달 못 함).
+- **해결:** `runtime` export 를 **아예 쓰지 않는다.** `runtime` 기본값이 이미 `'nodejs'`(출처: `route-segment-config/runtime.md` "'nodejs' (default)")라 명시 불필요. Edge 는 puppeteer 와 무관하게 cacheComponents 미지원.
+- **`maxDuration` 은 OK** — `export const maxDuration = 30` 은 cacheComponents 와 충돌 안 함(v16 에서 제거된 건 `dynamic`/`dynamicParams`/`revalidate`/`fetchCache`, `runtime`·`maxDuration`·`preferredRegion` 은 표에 잔존). 단 `runtime` 만 cacheComponents 가 거부.
+- **How to apply:** ROADMAP/인수인계 가이드가 `export const runtime = "nodejs"` 를 지시해도 이 프로젝트(cacheComponents:true)에선 넣지 말 것. T2.4 `/api/revalidate` 등 다른 Route Handler 도 동일.
+- 구현 위치: `app/q/[slug]/pdf/route.ts`(주석으로 근거 명시, maxDuration 만 유지).
+
+**6. PDF Route Handler 패턴 (T2.3)**
+`app/q/[slug]/pdf/route.ts`: `GET(_req: NextRequest, ctx: { params: Promise<{slug}> })` → `await ctx.params` → `getQuoteBySlug`(server-only lib, 라우트 import OK) null→404 → puppeteer-core launch(`@/lib/pdf-browser` buildLaunchOptions 공유, server-only 미import) → `page.goto(/q/${slug}?print=1, {waitUntil:"networkidle0"})` → `page.pdf({format:"A4",printBackground:true,margin:10mm})` → `finally browser.close()`.
+- ⚠️ `?print=1` 는 서버 렌더 분기에 안 씀(셸에서 searchParams 읽으면 게이트#1 깸). UI 크롬 숨김은 **Tailwind `print:hidden`(=@media print)** — puppeteer page.pdf() 가 print 미디어 에뮬레이트하므로 자동 적용. `data-print-hide` 속성은 CSS 없어 무효 → `print:hidden` 클래스로 교체함(Header/Footer/page.tsx 셸 placeholder/quote-view.tsx PDF버튼 2개).
+- 실측: print 미디어에서 header/footer/placeholder/PDF버튼 display:none, article block 유지. 생성 PDF 188.5KB·1p·%PDF-1.4·"Pretendard" 흔적. 파일명 `견적서_<clientCompany>_<YYYYMMDD(issuedAt)>.pdf` RFC5987 `filename*=UTF-8''<encodeURIComponent>`. 빌드 `ƒ /q/[slug]/pdf`. proxy.ts `/q/:path*` 가 pdf 응답에도 X-Robots-Tag 적용(추가 작업 불필요).
+- `page.pdf()` 반환은 `Uint8Array`(v24) → Response body 로 `pdfBytes.buffer.slice(byteOffset, byteOffset+byteLength)` 정확 구간 복사 전달.
+
+관련: [[notion_slug_formula_filter_trap]] [[w2-pdf-chromium-setup]] [[w2-korean-font-pretendard]]

@@ -25,6 +25,7 @@ metadata:
 - `href="#"` 사용 — Footer의 링크들이 더미 href 사용
 - `hasMissingRequired` 판정이 UI 컴포넌트에서도 중복 — `normalizeQuote`에서 이미 warn 처리 후 UI에서도 null 체크 중복. 일관성은 있으나 명확히 분리됐는지 확인 필요
 - 부가세 0% 조건: UI(`taxRate > 0`)와 타입 계산 모두 일관되게 처리됨 — 올바른 패턴
+- Bearer 토큰 비교를 `!==` 단순 비교로 구현 — W2에서 `revalidate/route.ts`에서 반복. `crypto.timingSafeEqual`로 교체 필수 (C1 지적)
 
 **도메인 특이사항 (W1 견적서):**
 - Notion formula 타입(`슬러그`)은 dataSources.query 필터 불가 — "상태=발행 전체 페치 후 코드 측 slug 비교 + 페이지네이션" 폴백 패턴이 정착됨
@@ -36,3 +37,11 @@ metadata:
 - 대시보드 레이아웃은 루트 레이아웃(Header/Footer 포함)과 중첩 — 결과적으로 min-h 계산에서 헤더/푸터 높이를 하드코딩(`8rem`)으로 처리
 - `sidebarItems`가 `dashboard/layout.tsx`에 정적 배열로 선언 — 인증 상태에 따른 분기 없음
 - Footer 링크들이 `<a>` 태그 사용 — Next.js `<Link>` 미사용 (외부 링크가 아닌데도)
+
+**W2 PDF/Revalidate 패턴 (2026-05-21 관찰):**
+- `finally { await browser?.close() }` 패턴으로 puppeteer 리소스 누수 방지 — 올바른 패턴
+- `export const runtime` 생략이 `cacheComponents:true`와의 충돌 회피를 위한 의도적 선택 — 이유를 주석으로 명시하는 규칙이 정착됨
+- `revalidateTag(tag, { expire: 0 })` — Next.js 16.2.6에서 webhook 즉시 만료 패턴, 두 번째 인자 형식
+- PDF 라우트에서 500 응답에 내부 에러 메시지(`error.message`) 노출 — 반복 위험. 클라이언트 응답은 일반 메시지만, 서버 로그에 상세 기록하는 패턴으로 통일 필요
+- `--no-sandbox` 플래그를 로컬 환경에서도 적용하는 패턴 — Linux 컨테이너에서만 필요. 플랫폼 분기 권장
+- `data-print-hide` 속성이 실제 CSS/JS 처리 없이 선언됨 — 의도 불명확. `print:hidden` Tailwind 클래스와 역할 중복 가능성 확인 필요

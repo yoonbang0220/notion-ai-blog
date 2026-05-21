@@ -71,19 +71,19 @@ export function QuoteView({
     quote.issuerCompany == null ||
     quote.clientCompany == null
 
-  // T2.3 에서 동작 연결될 PDF 다운로드 경로. 지금은 링크만(헤드리스 인쇄는 W2).
+  // PDF 다운로드 경로(T2.3). /q/[slug]/pdf 가 헤드리스 인쇄로 application/pdf 응답.
   const pdfHref = `/q/${quote.slug}/pdf`
 
   return (
-    // data-print-region: T2.3 에서 ?print=1 분기로 버튼/배너 숨김 시 훅으로 사용.
-    <article className="space-y-6" data-print-region="quote">
+    // 인쇄(PDF) 시 UI 크롬(버튼·운영용 배너)은 각 요소의 `print:hidden` 으로 숨긴다
+    // (puppeteer page.pdf() 가 print 미디어를 에뮬레이트).
+    <article className="space-y-6">
       {/* ── 정합성 배너(상단) ───────────────────────────────── */}
       {isExpired && (
         // 규칙 7 — 만료. 빨간 배너. 본문은 그대로 노출(차단은 Future).
         <div
           role="alert"
-          className="border-destructive/50 bg-destructive/10 text-destructive flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-medium"
-          data-print-hide="true"
+          className="border-destructive/50 bg-destructive/10 text-destructive flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-medium print:hidden"
         >
           유효기간이 만료되었습니다.
         </div>
@@ -93,8 +93,7 @@ export function QuoteView({
         // 전용 "warning" 토큰이 없어 bg-muted + border 로 주의를 표현한다.
         <div
           role="status"
-          className="bg-muted text-foreground border-border rounded-lg border px-4 py-3 text-sm"
-          data-print-hide="true"
+          className="bg-muted text-foreground border-border rounded-lg border px-4 py-3 text-sm print:hidden"
         >
           일부 필수 정보가 누락되어 표시되지 않은 항목이 있습니다.
         </div>
@@ -114,14 +113,14 @@ export function QuoteView({
               <MetaRow label="유효기간" value={quote.validUntil} />
             </dl>
           </div>
-          {/* 우상단 PDF 버튼(동작은 T2.3). 인쇄 시 숨김 대상. */}
+          {/* 우상단 PDF 버튼(T2.3: /q/[slug]/pdf 다운로드). print:hidden — 인쇄 시 숨김. */}
           {/* nativeButton=false — base-ui Button 을 <a> 로 렌더(비-button 엘리먼트). */}
           <Button
             render={<a href={pdfHref} />}
             nativeButton={false}
             variant="outline"
             size="sm"
-            data-print-hide="true"
+            className="print:hidden"
           >
             <Download aria-hidden="true" />
             PDF 다운로드
@@ -301,7 +300,8 @@ export function QuoteView({
       )}
 
       {/* ── 하단 PDF 버튼 ───────────────────────────────────── */}
-      <div className="flex justify-center pt-2" data-print-hide="true">
+      {/* print:hidden — 인쇄 시 숨김(T2.3). */}
+      <div className="flex justify-center pt-2 print:hidden">
         <Button
           render={<a href={pdfHref} />}
           nativeButton={false}

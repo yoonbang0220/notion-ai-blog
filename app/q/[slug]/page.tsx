@@ -62,8 +62,8 @@ export default function QuotePage({ params }: QuotePageProps) {
   //    Suspense 안의 QuoteResolver 로 넘겨 거기서 await 한다.
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
-      {/* 정적 셸 — 발행처 영역(placeholder). T1.6 에서 정식 디자인으로 교체. */}
-      <div className="mb-6 border-b pb-4">
+      {/* 정적 셸 — 발행처 영역(placeholder). print:hidden — PDF 인쇄 시 제외(T2.3). */}
+      <div className="mb-6 border-b pb-4 print:hidden">
         <p className="text-muted-foreground text-sm">견적서</p>
       </div>
 
