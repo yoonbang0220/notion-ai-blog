@@ -404,7 +404,9 @@
 - **함정·메모**:
   - Next.js 16 metadata API `robots` 옵션은 `<meta>` 만 생성. HTTP 헤더 강제는 middleware 가 가장 안정적.
 
-#### T2.6 — Playwright MCP E2E 시나리오 + 시드 견적 2건 정비
+#### ✅ T2.6 — Playwright MCP E2E 시나리오 + 시드 견적 2건 정비
+
+> ✅ **완료 (2026-05-21, qa-engineer)**: dev 환경 검증 가능한 **7종(A·B·C·D·F·G·H) 전부 PASS** — 정상 데스크톱(총합 2,090,000), 모바일 카드분해·가로스크롤 0, 만료 배너, 404, noindex 헤더(견적+PDF), PDF 다운로드 188KB·한글 파일명, 다크모드. 콘솔 에러 0, 버그 0. 리포트: `docs/PHASE2_E2E_REPORT.md`. ⚠️ **E(Draft→404)·I(revalidate 통합)는 T2.7(production)로 이연** — Draft 시드 부재(기존 시드 훼손 불가)·dev `"use cache"` 동작이 production 과 상이·`ClientContact` 필드 DB 부재 때문. 메커니즘은 서버 Published 필터 + `test:quotes` 10/10·`revalidate` 9/9 로 커버.
 
 - **추정**: L (1~2d) · **담당 영역**: qa · **테스트**: Playwright MCP (이 태스크 자체가 테스트)
 - **세부 단계**:
@@ -461,7 +463,7 @@
 - [ ] T2.1~T2.7 모든 작업 항목 인수 조건 통과. *(T2.1~T2.5 ✅ 2026-05-21 / T2.6 E2E·T2.7 배포 잔여)*
 - [x] `npm run build` 통과. *(2026-05-21: `/` Static · `/q/[slug]` PPR · `/q/[slug]/pdf`·`/api/revalidate` ƒ)*
 - [x] `npm run test:quotes`, `tsx scripts/test/pdf-route.ts`, `tsx scripts/test/revalidate.ts` 모두 통과. *(test:quotes 10/10 · pdf-route 5/5 · revalidate 9/9)*
-- [ ] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오 모두 PASS. *(T2.6 잔여)*
+- [~] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오. *(2026-05-21: dev 검증 7종 A·B·C·D·F·G·H PASS / E·I 는 production 필요로 T2.7 이연)*
 - [ ] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작. *(T2.7 잔여)*
 - [x] `robots.txt` + `X-Robots-Tag` 검증 통과. *(T2.5 — robots.txt Disallow + proxy.ts 헤더 + meta)*
 - [ ] **정의된 테스트 시나리오가 모두 통과 (Playwright MCP 실측 + 단위·통합 스크립트 + 수동 production 체크리스트)**.
@@ -660,3 +662,4 @@ T2.7 (Vercel 배포)
 | 2026-05-21 | code-reviewer-kr 리뷰 quick fix(C1·M4·M5·S1) 반영. **T1.8(랜딩 `/` 정식화) 신규 추가** — PRD IA 에 있으나 ROADMAP 누락이던 메인 페이지 | code-reviewer-kr / 사용자 요청 |
 | 2026-05-21 | **T1.8 완료** — `app/page.tsx` 정식 랜딩 검증(build `/` `○ Static`·tsc·lint·Playwright 데스크톱/모바일/다크 3종·콘솔 0). W1 종료, 다음 W2 | quote-ui-designer |
 | 2026-05-21 | **T2.1~T2.5 완료** — puppeteer-core+@sparticuz/chromium 설치·pdf-spike / Pretendard 폰트 / `/q/[slug]/pdf` PDF 라우트 / `/api/revalidate` Bearer webhook / robots.txt. tsc·lint·build 통과, test:quotes 10/10·pdf-route 5/5·revalidate 9/9. code-reviewer-kr quick fix C1(타이밍 안전 비교)·C2(에러 비노출)·M4(샌드박스)·S3 반영. 잔여 W2=T2.6(E2E)·T2.7(배포) | quote-viewer-builder / code-reviewer-kr |
+| 2026-05-21 | **T2.6 완료** — Playwright MCP E2E 7종(A·B·C·D·F·G·H) PASS, 콘솔 0·버그 0. `docs/PHASE2_E2E_REPORT.md` 작성. E(Draft→404)·I(revalidate 통합)는 production 필요로 T2.7 이연. 잔여 W2=T2.7(배포)뿐 | qa-engineer |

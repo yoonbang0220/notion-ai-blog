@@ -53,8 +53,8 @@ npx shadcn@latest add <component> # shadcn/ui 컴포넌트 추가
 - 일정: 파트타임 2주 — W1 / W2. 태스크 ID 컨벤션 `T1.x` / `T2.x`.
 - **W0 (초기화) 완료** — 블로그 도메인 자산 제거, 견적서 도메인 기반 정돈.
 - **W1 완료** — ✅ T1.1~T1.8 (Notion 시드 → `getQuoteBySlug`/`getQuoteItems`/`calculateTotals` → 도메인 타입 → `/q/[slug]` 셸+Suspense+noindex → `<QuoteView>` 반응형 → `isQuoteExpired` 만료 판정 → 랜딩 `/` 정식화) + code-reviewer-kr 리뷰·quick fix 반영. `npm run test:quotes` 10/10, `npm run build`(`/` Static + `/q/[slug]` Partial Prerender) 통과. T1.8 은 quote-ui-designer 검증(2026-05-21): build `/` `○ Static` 유지 + Playwright 데스크톱·모바일·다크 3종 통과.
-- **W2 진행 중** — ✅ T2.1(puppeteer-core+@sparticuz/chromium 설치·pdf-spike) · T2.2(Pretendard 폰트 임베드) · T2.3(`/q/[slug]/pdf` 헤드리스 PDF 라우트) · T2.4(`/api/revalidate` Bearer webhook) · T2.5(robots.txt) 완료 + code-reviewer-kr quick fix(C1 타이밍안전비교·C2 에러비노출·M4 샌드박스·S3) 반영. tsc·lint·build 통과, test:quotes 10/10·pdf-route 5/5·revalidate 9/9. **잔여**: ⬜ **T2.6**(Playwright E2E, `qa-engineer`) · ⬜ **T2.7**(Vercel 배포, ops).
-- 크리티컬 패스: `lib/quotes.ts → app/q/[slug]/page.tsx → app/q/[slug]/pdf/route.ts → app/api/revalidate/route.ts → robots/noindex → Playwright E2E`. (현재 `robots/noindex` 까지 완료. 남은 건 Playwright E2E(T2.6) + Vercel 배포(T2.7).)
+- **W2 거의 완료** — ✅ T2.1(puppeteer-core+@sparticuz/chromium·pdf-spike) · T2.2(Pretendard 폰트) · T2.3(`/q/[slug]/pdf` PDF 라우트) · T2.4(`/api/revalidate` Bearer webhook) · T2.5(robots.txt) · T2.6(Playwright E2E 7종 PASS, `docs/PHASE2_E2E_REPORT.md`) 완료 + code-reviewer-kr quick fix(C1·C2·M4·S3) 반영. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9. **잔여**: ⬜ **T2.7**(Vercel 배포, ops) — 여기서 E2E E(Draft→404)·I(revalidate 통합) production 실측 마무리.
+- 크리티컬 패스: `lib/quotes.ts → app/q/[slug]/page.tsx → app/q/[slug]/pdf/route.ts → app/api/revalidate/route.ts → robots/noindex → Playwright E2E`. (Playwright E2E(T2.6)까지 완료. 남은 건 Vercel 배포(T2.7) = MVP launch.)
 - 작업 착수 전 `docs/ROADMAP.md` 해당 태스크 ID 섹션을 우선 확인할 것 (DoD·테스트 계획·의존성·리스크 포함).
 
 ## 도메인 모델 (Notion DB)

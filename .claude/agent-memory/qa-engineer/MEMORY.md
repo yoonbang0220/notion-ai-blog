@@ -1,2 +1,3 @@
 - [프로젝트 QA 검수 결과](project-qa-findings.md) — 2026-05-14 첫 검수, 14건(Critical 1/High 4/Medium 5/Low 4), 폼 핸들러 부재·미구현 링크·모바일 레이아웃 등 취약 패턴 기록
 - [테스트 프레임워크 현황](project-test-framework.md) — 테스트 프레임워크 미설치, Vitest + @testing-library/react 도입 권장
+- [T2.6 E2E 실행 결과](t26-e2e-results.md) — 2026-05-21 Playwright MCP 9시나리오: 7종 PASS, E·I DEFERRED(Draft 시드 없음·dev 캐시 불안정)
