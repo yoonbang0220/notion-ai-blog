@@ -406,7 +406,7 @@
 
 #### ✅ T2.6 — Playwright MCP E2E 시나리오 + 시드 견적 2건 정비
 
-> ✅ **완료 (2026-05-21, qa-engineer)**: dev 환경 검증 가능한 **7종(A·B·C·D·F·G·H) 전부 PASS** — 정상 데스크톱(총합 2,090,000), 모바일 카드분해·가로스크롤 0, 만료 배너, 404, noindex 헤더(견적+PDF), PDF 다운로드 188KB·한글 파일명, 다크모드. 콘솔 에러 0, 버그 0. 리포트: `docs/PHASE2_E2E_REPORT.md`. ⚠️ **E(Draft→404)·I(revalidate 통합)는 T2.7(production)로 이연** — Draft 시드 부재(기존 시드 훼손 불가)·dev `"use cache"` 동작이 production 과 상이·`ClientContact` 필드 DB 부재 때문. 메커니즘은 서버 Published 필터 + `test:quotes` 10/10·`revalidate` 9/9 로 커버.
+> ✅ **완료 (2026-05-21, qa-engineer)**: dev 환경 검증 가능한 **7종(A·B·C·D·F·G·H) 전부 PASS** — 정상 데스크톱(총합 2,090,000), 모바일 카드분해·가로스크롤 0, 만료 배너, 404, noindex 헤더(견적+PDF), PDF 다운로드 188KB·한글 파일명, 다크모드. 콘솔 에러 0, 버그 0. 리포트: `docs/PHASE2_E2E_REPORT.md`. ⚠️ **E(Draft→404)·I(revalidate 통합)는 T2.8(production 배포)로 이연** — Draft 시드 부재(기존 시드 훼손 불가)·dev `"use cache"` 동작이 production 과 상이·`ClientContact` 필드 DB 부재 때문. 메커니즘은 서버 Published 필터 + `test:quotes` 10/10·`revalidate` 9/9 로 커버.
 
 - **추정**: L (1~2d) · **담당 영역**: qa · **테스트**: Playwright MCP (이 태스크 자체가 테스트)
 - **세부 단계**:
@@ -436,20 +436,43 @@
   - ⚠️ Playwright MCP 의 `browser_navigate` 는 prod URL 또는 `npm run dev` 로컬 둘 다 가능. CI 미설정 — 수동 실행 + 결과 리포트.
   - ⚠️ 시나리오 I (revalidate 통합) 는 실제 Notion 수정이 필요 — 수정 후 원상복구 단계도 시나리오에 포함.
 
-#### T2.7 — Vercel 배포 + 도메인 연결 + 환경변수 등록
+#### ⬜ T2.7 — 배포 전 하드닝 (전역 에러 경계 · 레이트리밋 · 폰트 서브셋)
 
-- **추정**: M (0.5~1d) · **담당 영역**: ops · **테스트**: 수동 체크리스트
+- **추정**: M (0.5~1d) · **담당 영역**: infra / security / perf · **테스트**: 단위 + Playwright · **권장 에이전트**: `quote-viewer-builder`
+- **배경**: 코드리뷰·E2E 통과 후 production 노출 직전 **최소 견고화**. (2026-05-21 사용자 결정 — "최소(MVP 충실)" 구조 채택: 배포 전 필수 하드닝 1개만, 추가 성능·보안헤더·분산 레이트리밋은 배포 후 **측정 기반 백로그**에서 선별.) "측정 없는 최적화는 추측"이라 본격 성능 튜닝은 T2.8 production 실측 이후로 미룬다.
+- **세부 단계**:
+  1. **전역 에러 경계** — `app/error.tsx` 신규(`"use client"`). `getQuoteBySlug` 의 중복 slug `throw`(정합성 규칙 1)·Notion API 실패가 흰 화면/스택트레이스가 아니라 한국어 안내 + "다시 시도"·"홈으로" 로 graceful 하게 처리. 필요 시 `app/q/[slug]/error.tsx`(견적 경로 전용)·`app/global-error.tsx`(루트 레이아웃 실패) 검토.
+  2. **레이트리밋(best-effort)** — 비싼 공개 엔드포인트 `/q/[slug]/pdf` 우선, `/api/revalidate`(이미 Bearer 인증이라 후순위). ⚠️ 서버리스는 in-memory 가 인스턴스 간 공유 안 됨 → MVP 는 경량 제한(IP/슬러그 기준) + 임계 초과 시 429. **견고한 분산 리밋(Upstash/Vercel KV)은 백로그**로 명시(신규 외부 의존성·비용 결정 필요).
+  3. **폰트 서브셋(빠른 성능 1건)** — `public/fonts/PretendardVariable.woff2`(2MB)를 한글(상용 글리프)+영문+숫자 subset 으로 축소(수백 KB 목표). `next/font/local` 배선 유지, 한글 누락 없는지 견적/랜딩 실측.
+- **인수 조건**:
+  - 데이터 페치 throw(중복 slug 등) 시 `app/error.tsx` 가 한국어 안내로 렌더 — 흰 화면·스택트레이스 노출 0.
+  - `/q/[slug]/pdf` 연속 호출 시 임계 초과분이 429(또는 정의 코드)로 제한.
+  - 폰트 전송 크기 유의미 감소(빌드 자산/네트워크 탭 before/after 비교).
+  - `npm run build`·`tsc`·`lint` 통과 + 기존 회귀(`test:quotes` 10/10·`pdf-route` 5/5·`revalidate` 9/9) 유지, 견적/랜딩 한글 렌더 정상.
+- **의존성**: T2.6. **배포(T2.8) 직전 단계.**
+- **테스트 계획**:
+  - 단위/통합: `scripts/test/<name>.ts` — 레이트리밋 임계 동작(허용/초과 차단) + (가능 시) error 경계 throw 시나리오.
+  - Playwright: 중복 slug(또는 throw 유발) → `error.tsx` 안내 텍스트 확인 / `/q/<slug>/pdf` 연속 호출 → 429 `browser_network_request`.
+- **함정·메모**: ⚠️ Route Handler 에 `runtime` export 금지(cacheComponents 충돌, T2.3 실측). 서버리스 in-memory 리밋 한계 명시(완전한 보장은 KV 백로그). 폰트 subset 시 한글 글리프 누락 주의. **과설계 금지 — "최소" 결정 준수**(보안 헤더·분산 리밋·VRT 등은 백로그).
+
+#### ⬜ T2.8 — Vercel 배포 + 도메인 연결 + 환경변수 등록 (+ production 실측 · 이연 E2E)
+
+- **추정**: M (0.5~1d) · **담당 영역**: ops · **테스트**: 수동 체크리스트 + production 실측
 - **세부 단계**:
   1. Vercel 프로젝트 신규 생성, GitHub 리포지토리 연결.
   2. 환경변수 등록: `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `NOTION_ITEMS_DATABASE_ID`, `NOTION_REVALIDATE_SECRET`. *(시크릿 변수명은 SSOT 기준 `NOTION_REVALIDATE_SECRET`)*
   3. `vercel.json` 에 `/q/[slug]/pdf` 라우트 메모리 1024MB 설정 — ✅ T2.1 에서 추가 완료(`functions` memory:1024/maxDuration:30).
   4. 커스텀 도메인 연결 (예: `quote.example.com`).
   5. preview → production 승격.
+  6. **이연 E2E 마무리(T2.6→여기)**: (E) Draft 전용 시드 추가 후 `/q/<draft-slug>` → 404 실측 / (I) production 캐시 hit → Notion 견적 필드(존재하는 필드, 예: 비고) 수정 → `POST /api/revalidate`(Bearer) → 5초 후 재방문 변경 반영 실측.
+  7. **production 성능 실측(측정 우선)**: Lighthouse(LCP/TBT) + PDF 콜드스타트/핫 응답시간 측정 → 결과를 백로그 판단 근거로 기록.
 - **인수 조건**:
   - production URL 에서 시드 견적 정상 열람.
   - production 에서 PDF 다운로드 정상 (콜드스타트 포함 10초 이내).
   - revalidate webhook 이 production 환경변수로 동작.
-- **의존성**: T2.3, T2.4, T2.5, T2.6
+  - 이연 E2E E(Draft→404)·I(revalidate 통합) production 실측 PASS.
+  - production 성능 수치(Lighthouse·PDF 응답시간) 기록 → 백로그 항목 선별.
+- **의존성**: T2.3, T2.4, T2.5, T2.6, T2.7
 - **테스트 계획**:
   - 체크리스트:
     1. preview 배포에서 시나리오 A~I 핵심 3종(A·G·I) 재실행 → PASS.
@@ -460,13 +483,22 @@
 
 ### Phase 2 완료 정의 (DoD)
 
-- [ ] T2.1~T2.7 모든 작업 항목 인수 조건 통과. *(T2.1~T2.5 ✅ 2026-05-21 / T2.6 E2E·T2.7 배포 잔여)*
+- [ ] T2.1~T2.8 모든 작업 항목 인수 조건 통과. *(T2.1~T2.6 ✅ 2026-05-21 / T2.7 배포 전 하드닝·T2.8 배포 잔여)*
 - [x] `npm run build` 통과. *(2026-05-21: `/` Static · `/q/[slug]` PPR · `/q/[slug]/pdf`·`/api/revalidate` ƒ)*
 - [x] `npm run test:quotes`, `tsx scripts/test/pdf-route.ts`, `tsx scripts/test/revalidate.ts` 모두 통과. *(test:quotes 10/10 · pdf-route 5/5 · revalidate 9/9)*
-- [~] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오. *(2026-05-21: dev 검증 7종 A·B·C·D·F·G·H PASS / E·I 는 production 필요로 T2.7 이연)*
-- [ ] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작. *(T2.7 잔여)*
+- [~] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오. *(2026-05-21: dev 검증 7종 A·B·C·D·F·G·H PASS / E·I 는 production 필요로 T2.8 이연)*
+- [ ] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작. *(T2.8 잔여)*
 - [x] `robots.txt` + `X-Robots-Tag` 검증 통과. *(T2.5 — robots.txt Disallow + proxy.ts 헤더 + meta)*
 - [ ] **정의된 테스트 시나리오가 모두 통과 (Playwright MCP 실측 + 단위·통합 스크립트 + 수동 production 체크리스트)**.
+
+### 측정 후 백로그 (T2.8 production 실측 뒤 데이터 기반 선별)
+
+> 2026-05-21 "최소(MVP 충실)" 결정에 따라 배포 전엔 만들지 않고, T2.8 실측 수치를 보고 필요한 것만 채택한다.
+
+- 분산 레이트리밋(Upstash/Vercel KV) — 서버리스 인스턴스 간 공유 보장(T2.7 의 best-effort 상위 버전). 신규 외부 의존성·비용 결정 필요.
+- 보안 헤더 강화(CSP·X-Frame-Options·Referrer-Policy 등) — `next.config.ts headers()` 또는 `proxy.ts`.
+- 성능 튜닝(데이터 기반) — Lighthouse/콜드스타트 결과에 따른 PDF 콜드스타트 완화(`window.print()` 폴백, R4), 캐시 TTL 조정, 이미지/번들 추가 최적화.
+- 시각 회귀(VRT) 자동화(Percy/Chromatic 등) — 다크모드 픽셀 비교(T2.6 H 는 현재 수동).
 
 ### Phase 2 리스크
 
@@ -662,4 +694,5 @@ T2.7 (Vercel 배포)
 | 2026-05-21 | code-reviewer-kr 리뷰 quick fix(C1·M4·M5·S1) 반영. **T1.8(랜딩 `/` 정식화) 신규 추가** — PRD IA 에 있으나 ROADMAP 누락이던 메인 페이지 | code-reviewer-kr / 사용자 요청 |
 | 2026-05-21 | **T1.8 완료** — `app/page.tsx` 정식 랜딩 검증(build `/` `○ Static`·tsc·lint·Playwright 데스크톱/모바일/다크 3종·콘솔 0). W1 종료, 다음 W2 | quote-ui-designer |
 | 2026-05-21 | **T2.1~T2.5 완료** — puppeteer-core+@sparticuz/chromium 설치·pdf-spike / Pretendard 폰트 / `/q/[slug]/pdf` PDF 라우트 / `/api/revalidate` Bearer webhook / robots.txt. tsc·lint·build 통과, test:quotes 10/10·pdf-route 5/5·revalidate 9/9. code-reviewer-kr quick fix C1(타이밍 안전 비교)·C2(에러 비노출)·M4(샌드박스)·S3 반영. 잔여 W2=T2.6(E2E)·T2.7(배포) | quote-viewer-builder / code-reviewer-kr |
-| 2026-05-21 | **T2.6 완료** — Playwright MCP E2E 7종(A·B·C·D·F·G·H) PASS, 콘솔 0·버그 0. `docs/PHASE2_E2E_REPORT.md` 작성. E(Draft→404)·I(revalidate 통합)는 production 필요로 T2.7 이연. 잔여 W2=T2.7(배포)뿐 | qa-engineer |
+| 2026-05-21 | **T2.6 완료** — Playwright MCP E2E 7종(A·B·C·D·F·G·H) PASS, 콘솔 0·버그 0. `docs/PHASE2_E2E_REPORT.md` 작성. E(Draft→404)·I(revalidate 통합)는 production 필요로 이연 | qa-engineer |
+| 2026-05-21 | **W2 재구성**(사용자 결정, "최소" 구조) — 신규 **T2.7 배포 전 하드닝**(error.tsx 전역 에러 경계·PDF/revalidate 레이트리밋·폰트 서브셋) 삽입, 기존 배포는 **T2.8**(+이연 E2E E·I·production 성능 실측)로 번호 이동. 추가 성능·보안헤더·분산 리밋은 측정 후 백로그. Phase 2 = T2.1~T2.8 | 사용자 요청 |
