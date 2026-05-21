@@ -11,7 +11,8 @@
     "test:quotes": "node --env-file=.env.local --import tsx scripts/test/quotes-client.ts",
     "test:pdf-spike": "node --import tsx scripts/test/pdf-spike.ts",
     "test:pdf-route": "node --env-file=.env.local --import tsx scripts/test/pdf-route.ts",
-    "test:revalidate": "node --env-file=.env.local --import tsx scripts/test/revalidate.ts"
+    "test:revalidate": "node --env-file=.env.local --import tsx scripts/test/revalidate.ts",
+    "test:rate-limit": "node --env-file=.env.local --import tsx scripts/test/rate-limit.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -39,11 +40,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/subset-font": "^2.3.0",
     "eslint": "^9",
     "eslint-config-next": "^16.2.6",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "shadcn": "^4.7.0",
+    "subset-font": "^2.5.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.0",
     "typescript": "^5"

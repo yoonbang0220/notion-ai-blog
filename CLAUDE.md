@@ -53,8 +53,8 @@ npx shadcn@latest add <component> # shadcn/ui 컴포넌트 추가
 - 일정: 파트타임 2주 — W1 / W2. 태스크 ID 컨벤션 `T1.x` / `T2.x`.
 - **W0 (초기화) 완료** — 블로그 도메인 자산 제거, 견적서 도메인 기반 정돈.
 - **W1 완료** — ✅ T1.1~T1.8 (Notion 시드 → `getQuoteBySlug`/`getQuoteItems`/`calculateTotals` → 도메인 타입 → `/q/[slug]` 셸+Suspense+noindex → `<QuoteView>` 반응형 → `isQuoteExpired` 만료 판정 → 랜딩 `/` 정식화) + code-reviewer-kr 리뷰·quick fix 반영. `npm run test:quotes` 10/10, `npm run build`(`/` Static + `/q/[slug]` Partial Prerender) 통과. T1.8 은 quote-ui-designer 검증(2026-05-21): build `/` `○ Static` 유지 + Playwright 데스크톱·모바일·다크 3종 통과.
-- **W2 거의 완료** — ✅ T2.1(puppeteer-core+@sparticuz/chromium·pdf-spike) · T2.2(Pretendard 폰트) · T2.3(`/q/[slug]/pdf` PDF 라우트) · T2.4(`/api/revalidate` Bearer webhook) · T2.5(robots.txt) · T2.6(Playwright E2E 7종 PASS, `docs/PHASE2_E2E_REPORT.md`) 완료 + code-reviewer-kr quick fix(C1·C2·M4·S3) 반영. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9. **잔여**(2026-05-21 "최소" 재구성): ⬜ **T2.7**(배포 전 하드닝 — `app/error.tsx` 전역 에러 경계·PDF/revalidate 레이트리밋·Pretendard 폰트 서브셋) → ⬜ **T2.8**(Vercel 배포, ops; 이연 E2E E(Draft→404)·I(revalidate) production 실측 포함). 추가 성능·보안헤더·분산 리밋(KV)·VRT 는 측정 후 백로그.
-- 크리티컬 패스: `lib/quotes.ts → app/q/[slug]/page.tsx → app/q/[slug]/pdf/route.ts → app/api/revalidate/route.ts → robots/noindex → Playwright E2E`. (Playwright E2E(T2.6)까지 완료. 남은 건 배포 전 하드닝(T2.7) → Vercel 배포(T2.8) = MVP launch.)
+- **W2 거의 완료** — ✅ T2.1(puppeteer-core+@sparticuz/chromium·pdf-spike) · T2.2(Pretendard 폰트) · T2.3(`/q/[slug]/pdf` PDF 라우트) · T2.4(`/api/revalidate` Bearer webhook) · T2.5(robots.txt) · T2.6(Playwright E2E 7종 PASS, `docs/PHASE2_E2E_REPORT.md`) 완료 + code-reviewer-kr quick fix(C1·C2·M4·S3) 반영. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9. ✅ **T2.7 배포 전 하드닝**(`app/error.tsx` 전역 에러 경계·`lib/rate-limit.ts` 레이트리밋[PDF 10·revalidate 30/분, 429]·Pretendard 폰트 서브셋 2MB→452KB) + code-reviewer-kr quick fix(C2·M4·m1). **잔여**: ⬜ **T2.8**(Vercel 배포, ops; 이연 E2E E(Draft→404)·I(revalidate) production 실측 포함) = MVP launch. 추가 성능·보안헤더·분산 리밋(KV)·VRT 는 측정 후 백로그.
+- 크리티컬 패스: `lib/quotes.ts → app/q/[slug]/page.tsx → app/q/[slug]/pdf/route.ts → app/api/revalidate/route.ts → robots/noindex → Playwright E2E`. (배포 전 하드닝(T2.7)까지 완료. 남은 건 Vercel 배포(T2.8) = MVP launch.)
 - 작업 착수 전 `docs/ROADMAP.md` 해당 태스크 ID 섹션을 우선 확인할 것 (DoD·테스트 계획·의존성·리스크 포함).
 
 ## 도메인 모델 (Notion DB)
@@ -160,7 +160,7 @@ types/index.ts        # ThemeMode (도메인 무관). 견적서 타입은 W1 에
 scripts/test/
   notion-client.ts    # Notion v5 SDK 4종 시나리오 자기검증 (정상/401/404/빈결과).
                       # 블로그 시절 작성됐으나 견적서 lib 작성 시 패턴 레퍼런스로 그대로 활용.
-public/               # 정적 자산. robots.txt(T2.5 — Disallow:/q/) · fonts/PretendardVariable.woff2(T2.2)
+public/               # 정적 자산. robots.txt(T2.5 — Disallow:/q/) · fonts/PretendardVariable.subset.woff2(T2.2 임베드·T2.7 서브셋 452KB)
 docs/
   QUOTE_VIEWER_PRD.md          # SSOT
   MVP PRD 양식.md              # PRD 작성 양식

@@ -436,7 +436,9 @@
   - ⚠️ Playwright MCP 의 `browser_navigate` 는 prod URL 또는 `npm run dev` 로컬 둘 다 가능. CI 미설정 — 수동 실행 + 결과 리포트.
   - ⚠️ 시나리오 I (revalidate 통합) 는 실제 Notion 수정이 필요 — 수정 후 원상복구 단계도 시나리오에 포함.
 
-#### ⬜ T2.7 — 배포 전 하드닝 (전역 에러 경계 · 레이트리밋 · 폰트 서브셋)
+#### ✅ T2.7 — 배포 전 하드닝 (전역 에러 경계 · 레이트리밋 · 폰트 서브셋)
+
+> ✅ **완료 (2026-05-21, quote-viewer-builder + code-reviewer-kr)**: (1) `app/error.tsx` 전역 에러 경계(`"use client"`, reset·홈으로, 에러 메시지 비노출). (2) `lib/rate-limit.ts` 경량 in-memory 고정윈도우 — `/q/[slug]/pdf` 분당 10/IP·`/api/revalidate` 분당 30/IP, 초과 시 429+`Retry-After`. ⚠️ 서버리스 인스턴스 간 미공유 best-effort(분산 KV 는 백로그). (3) Pretendard 폰트 서브셋 **2MB→452KB(77.5%↓)**, KS X 1001 상용 2350자+ASCII, 한글 폴백 0 실측. 검증: tsc·lint·build·`test:quotes` 10/10·`pdf-route` 5/5·`revalidate` 9/9·`rate-limit` 5/5. 코드리뷰 quick fix: C2(스윕 기준 RATE_LIMITS 도출)·M4(에러 메시지 일반화)·m1(Vercel IP 헤더 우선). *C1(스윕 off-by-one)은 오탐으로 판정 — 원 로직이 amortized 1% 의도대로 동작.*
 
 - **추정**: M (0.5~1d) · **담당 영역**: infra / security / perf · **테스트**: 단위 + Playwright · **권장 에이전트**: `quote-viewer-builder`
 - **배경**: 코드리뷰·E2E 통과 후 production 노출 직전 **최소 견고화**. (2026-05-21 사용자 결정 — "최소(MVP 충실)" 구조 채택: 배포 전 필수 하드닝 1개만, 추가 성능·보안헤더·분산 레이트리밋은 배포 후 **측정 기반 백로그**에서 선별.) "측정 없는 최적화는 추측"이라 본격 성능 튜닝은 T2.8 production 실측 이후로 미룬다.
@@ -483,7 +485,7 @@
 
 ### Phase 2 완료 정의 (DoD)
 
-- [ ] T2.1~T2.8 모든 작업 항목 인수 조건 통과. *(T2.1~T2.6 ✅ 2026-05-21 / T2.7 배포 전 하드닝·T2.8 배포 잔여)*
+- [ ] T2.1~T2.8 모든 작업 항목 인수 조건 통과. *(T2.1~T2.7 ✅ 2026-05-21 / T2.8 배포 잔여)*
 - [x] `npm run build` 통과. *(2026-05-21: `/` Static · `/q/[slug]` PPR · `/q/[slug]/pdf`·`/api/revalidate` ƒ)*
 - [x] `npm run test:quotes`, `tsx scripts/test/pdf-route.ts`, `tsx scripts/test/revalidate.ts` 모두 통과. *(test:quotes 10/10 · pdf-route 5/5 · revalidate 9/9)*
 - [~] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오. *(2026-05-21: dev 검증 7종 A·B·C·D·F·G·H PASS / E·I 는 production 필요로 T2.8 이연)*
@@ -696,3 +698,4 @@ T2.7 (Vercel 배포)
 | 2026-05-21 | **T2.1~T2.5 완료** — puppeteer-core+@sparticuz/chromium 설치·pdf-spike / Pretendard 폰트 / `/q/[slug]/pdf` PDF 라우트 / `/api/revalidate` Bearer webhook / robots.txt. tsc·lint·build 통과, test:quotes 10/10·pdf-route 5/5·revalidate 9/9. code-reviewer-kr quick fix C1(타이밍 안전 비교)·C2(에러 비노출)·M4(샌드박스)·S3 반영. 잔여 W2=T2.6(E2E)·T2.7(배포) | quote-viewer-builder / code-reviewer-kr |
 | 2026-05-21 | **T2.6 완료** — Playwright MCP E2E 7종(A·B·C·D·F·G·H) PASS, 콘솔 0·버그 0. `docs/PHASE2_E2E_REPORT.md` 작성. E(Draft→404)·I(revalidate 통합)는 production 필요로 이연 | qa-engineer |
 | 2026-05-21 | **W2 재구성**(사용자 결정, "최소" 구조) — 신규 **T2.7 배포 전 하드닝**(error.tsx 전역 에러 경계·PDF/revalidate 레이트리밋·폰트 서브셋) 삽입, 기존 배포는 **T2.8**(+이연 E2E E·I·production 성능 실측)로 번호 이동. 추가 성능·보안헤더·분산 리밋은 측정 후 백로그. Phase 2 = T2.1~T2.8 | 사용자 요청 |
+| 2026-05-21 | **T2.7 완료** — app/error.tsx 전역 에러 경계 + lib/rate-limit.ts(PDF 10·revalidate 30/분, 429+Retry-After, best-effort) + Pretendard 서브셋 2MB→452KB. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9·rate-limit 5/5. code-reviewer-kr quick fix C2·M4·m1 반영(C1 오탐 판정). 잔여 W2=T2.8(배포)뿐 | quote-viewer-builder / code-reviewer-kr |

@@ -3,6 +3,12 @@ import puppeteer, { type Browser } from "puppeteer-core"
 
 import { buildLaunchOptions } from "@/lib/pdf-browser"
 import { getQuoteBySlug } from "@/lib/quotes"
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  tooManyRequestsResponse,
+} from "@/lib/rate-limit"
 
 /**
  * `/q/[slug]/pdf` — 견적서를 헤드리스 Chromium 으로 인쇄해 `application/pdf` 로 응답한다(T2.3).
@@ -44,11 +50,23 @@ function formatDateYYYYMMDD(isoDate: string | null): string {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ slug: string }> },
 ) {
   // ⚠️ Next.js 16 — params 는 Promise.
   const { slug } = await ctx.params
+
+  // 레이트리밋(best-effort) — 비싼 헤드리스 인쇄 남용 차단. 키 = IP+slug 조합.
+  // ⚠️ 서버리스 in-memory 한계는 lib/rate-limit.ts 주석 참고(인스턴스 간 미공유).
+  const ip = getClientIp(req)
+  const rl = checkRateLimit(
+    `pdf:${ip}:${slug}`,
+    RATE_LIMITS.pdf.limit,
+    RATE_LIMITS.pdf.windowMs,
+  )
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSeconds)
+  }
 
   // 규칙 3 — slug 형식 위반/미공개/없음은 lib 단계에서 null → 404.
   const quote = await getQuoteBySlug(slug)
@@ -57,7 +75,7 @@ export async function GET(
   }
 
   // 자체 도메인의 견적 페이지를 인쇄 대상으로 사용한다(origin 은 요청에서 그대로 계승).
-  const targetUrl = new URL(`/q/${slug}?print=1`, _req.nextUrl.origin)
+  const targetUrl = new URL(`/q/${slug}?print=1`, req.nextUrl.origin)
 
   let browser: Browser | undefined
   try {

@@ -2,6 +2,13 @@ import { timingSafeEqual } from "node:crypto"
 
 import { revalidateTag } from "next/cache"
 
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  tooManyRequestsResponse,
+} from "@/lib/rate-limit"
+
 /**
  * 타이밍 공격에 안전한 문자열 비교(C1 리뷰 반영).
  * 단순 `!==` 는 일치 길이만큼 조기 종료해 비교 시간이 토큰 내용에 의존 → 부채널 노출.
@@ -42,6 +49,19 @@ function safeCompare(a: string, b: string): boolean {
  *    immediate expiration").
  */
 export async function POST(req: Request): Promise<Response> {
+  // 레이트리밋(best-effort) — Bearer 무차별 추측·webhook 폭주를 둔화. 키 = IP 기준.
+  // 인증 검사보다 먼저 적용해 토큰 추측 시도 자체의 처리량을 제한한다.
+  // ⚠️ 서버리스 in-memory 한계는 lib/rate-limit.ts 주석 참고(인스턴스 간 미공유).
+  const ip = getClientIp(req)
+  const rl = checkRateLimit(
+    `revalidate:${ip}`,
+    RATE_LIMITS.revalidate.limit,
+    RATE_LIMITS.revalidate.windowMs,
+  )
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSeconds)
+  }
+
   const secret = process.env.NOTION_REVALIDATE_SECRET
   // 서버 설정 오류: secret 미설정 시 인증 자체가 불가능 → 500.
   if (!secret) {
