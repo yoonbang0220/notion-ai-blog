@@ -1,3 +1,4 @@
 - [Base UI 컴포넌트](base_ui_components.md) — @base-ui/react button/card/separator 실제 props·링크버튼 render+nativeButton 패턴, table 없음
 - [반응형·토큰·배너](responsive_and_tokens.md) — table↔card sm: 전환, 다크모드 oklch 토큰, 만료/누락 배너 토큰 선택(전용 warning 토큰 없음)
 - [시드·레이아웃](seeds_and_layout.md) — 활성/만료 시드 slug, QuoteView props 계약·데이터 흐름·isExpired 임시처리·SSOT 규칙
+- [랜딩 페이지 T1.8](landing_page_t18.md) — / 정적 구조·Static 유지 조건·next-themes 다크모드 Playwright 검증법(localStorage+reload)

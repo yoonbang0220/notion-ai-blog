@@ -223,9 +223,30 @@
   - Playwright (T2.6): 만료 시드 견적(`regression-seed-expired`)으로 접속 → `browser_snapshot()` 에 만료 배너 텍스트 포함 확인.
 - **함정·메모**: 만료여도 페이지 노출은 허용(PRD 가정). 차단은 Future(Phase 3).
 
+#### ✅ T1.8 — 랜딩 페이지 `/` 정식화 (운영자용 소개)
+
+> ✅ **완료 (2026-05-21, quote-ui-designer 검증)**: `app/page.tsx` 가 히어로(서비스명 + "Notion 으로 쓰고, 링크로 공유하고, PDF 로 결재") + 운영자 3스텝 안내(작성→발행→공유) 정식 정적 랜딩으로 렌더. 검증 결과 — `npm run build` 에서 `/` 가 `○ (Static)` 유지, `tsc --noEmit`·`lint` 무경고, Playwright 데스크톱(1280×800)·모바일(375×667 가로스크롤 0)·다크모드 3종 통과, 콘솔 에러 0. 색 하드코딩 0(토큰만), shadcn `Card` 재사용, 범위 밖 기능 없음.
+
+- **추정**: S (<2h) · **담당 영역**: ui · **테스트**: 빌드 + Playwright(시각) · **권장 에이전트**: `quote-ui-designer`
+- **배경**: 현재 `/` 는 W0 의 개발용 임시 플레이스홀더("초기화 완료")다. PRD IA(`/  랜딩 — 운영자용 소개, MVP 는 정적 1페이지로 충분`)·"운영자는 Notion 에서만 작업한다" 기준으로 **정식 정적 랜딩**으로 교체한다. (2026-05-21 추가 — 메인 화면이 PRD 에는 있으나 ROADMAP 태스크가 누락돼 있었음.)
+- **세부 단계**:
+  1. `app/page.tsx` 의 플레이스홀더를 교체. **정적 페이지**(Notion 페치 없음 → 빌드에서 `○ Static` 유지).
+  2. 콘텐츠(간결): 서비스명 + 한 줄 가치 제안("Notion 으로 쓰고, 링크로 공유하고, PDF 로 결재"), 운영자용 짧은 안내(견적은 Notion 에서 작성 → `Status=발행` → 생성된 링크를 클라이언트에게 공유), 푸터. **클라이언트는 직접 `/q/[slug]` 링크로 들어오므로 견적 목록·검색·로그인은 만들지 않는다.**
+  3. 디자인: 기존 토큰(oklch)·다크모드·반응형. shadcn `card`/`button` 재사용, 색 하드코딩 금지. `components/common/Header`·`Footer` 와 일관. 한글 폰트(Pretendard)는 T2.2 적용 시 자동 반영.
+- **인수 조건**:
+  - `/` 가 "초기화 완료" 개발 문구가 아닌 정식 소개 화면으로 렌더.
+  - 데스크톱·모바일·다크모드 3종에서 깨짐 없음.
+  - `npm run build` 에서 `/` 가 `○ (Static)` 유지(동적 데이터 없음).
+  - 로그인·대시보드·견적 목록 등 범위 밖 기능 없음(PRD "정적 1페이지로 충분").
+- **의존성**: 없음 — T1.x·W2 와 독립, 병행 가능. **크리티컬 패스 아님**(클라이언트 Goal 검증은 `/q/[slug]` 로만 이뤄짐).
+- **테스트 계획**:
+  - 빌드: `npm run build` → `/` 가 `○ (Static)`.
+  - Playwright: `browser_navigate('/')` → `browser_snapshot()` 으로 소개 텍스트 확인, `browser_resize(375,667)` 모바일 깨짐 없음, 다크모드 스크린샷 1장.
+- **함정·메모**: 범위 최소 유지 — 과설계 금지. 운영자 전용 화면·인증·통계는 Future(Phase 3). 정적 페이지이므로 `"use cache"`/Suspense 불필요.
+
 ### Phase 1 완료 정의 (DoD)
 
-- [x] T1.1~T1.7 모든 작업 항목 인수 조건 통과. *(2026-05-21: T1.7 `isQuoteExpired` 구현, `test:quotes` 10/10)*
+- [x] T1.1~T1.8 모든 작업 항목 인수 조건 통과. *(T1.1~T1.7 ✅ 완료·코드리뷰 반영 / T1.8 ✅ 2026-05-21 quote-ui-designer 검증)*
 - [x] `npm run build` 통과 (Cache Components 게이트). *(2026-05-21: `/q/[slug]` Partial Prerender)*
 - [x] `npm run lint` 무경고.
 - [x] `npm run test:quotes` (신규 스크립트) 모든 시나리오 통과 → `=== 결과 요약 ===` 에 fail 0. *(7/7)*
@@ -626,3 +647,5 @@ T2.7 (Vercel 배포)
 | 2026-05-17 | 견적서 도메인 기준 신규 작성 (블로그 로드맵은 `docs/archive/ROADMAP.md` 로 이동) | prd-roadmap-architect |
 | 2026-05-21 | T1.1~T1.6 완료 검증·체크 (산출물 8종 존재·`test:quotes` 7/7·build `/q/[slug]` Partial Prerender). T1.7(`isQuoteExpired`)·코드리뷰 잔여 | /git:docs:update-roadmap |
 | 2026-05-21 | T1.7 완료 (`isQuoteExpired` 헬퍼 + `quote-data.tsx` 배선 + 만료 단위 3종). `test:quotes` 10/10·build 통과. Phase 1 잔여=code-reviewer-kr 리뷰 | quote-viewer-builder |
+| 2026-05-21 | code-reviewer-kr 리뷰 quick fix(C1·M4·M5·S1) 반영. **T1.8(랜딩 `/` 정식화) 신규 추가** — PRD IA 에 있으나 ROADMAP 누락이던 메인 페이지 | code-reviewer-kr / 사용자 요청 |
+| 2026-05-21 | **T1.8 완료** — `app/page.tsx` 정식 랜딩 검증(build `/` `○ Static`·tsc·lint·Playwright 데스크톱/모바일/다크 3종·콘솔 0). W1 종료, 다음 W2 | quote-ui-designer |
