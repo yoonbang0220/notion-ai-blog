@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
-import puppeteer, { type Browser } from "puppeteer-core"
+import type { Browser } from "puppeteer-core"
 
-import { buildLaunchOptions } from "@/lib/pdf-browser"
+import { launchBrowser } from "@/lib/pdf-browser"
 import { getQuoteBySlug } from "@/lib/quotes"
 import {
   RATE_LIMITS,
@@ -79,7 +79,7 @@ export async function GET(
 
   let browser: Browser | undefined
   try {
-    browser = await puppeteer.launch(await buildLaunchOptions())
+    browser = await launchBrowser()
     const page = await browser.newPage()
     // 한글 폰트(Pretendard, display:block) 로드 완료까지 대기 — networkidle0.
     await page.goto(targetUrl.toString(), { waitUntil: "networkidle0" })

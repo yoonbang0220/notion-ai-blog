@@ -17,7 +17,7 @@
 import { existsSync } from "node:fs"
 
 import chromium from "@sparticuz/chromium"
-import type puppeteer from "puppeteer-core"
+import puppeteer, { type Browser } from "puppeteer-core"
 
 /** puppeteer-core `launch()` 옵션 타입(버전 독립적으로 추론). */
 export type LaunchOptions = Parameters<typeof puppeteer.launch>[0]
@@ -85,4 +85,34 @@ export async function buildLaunchOptions(): Promise<LaunchOptions> {
     executablePath: findLocalBrowserPath(),
     headless: true,
   }
+}
+
+/**
+ * 헤드리스 브라우저를 launch 한다 — **ETXTBSY 재시도 포함**.
+ *
+ * ⚠️ 서버리스(Vercel Fluid)에서는 한 인스턴스가 동시 요청을 처리한다. 첫 버스트 때
+ *    여러 호출이 `/tmp` 의 압축 크롬 바이너리를 동시에 추출(write)하는데, 쓰기가 끝나기
+ *    전에 다른 호출이 그 파일을 spawn 하면 `spawn ETXTBSY`("text file busy")가 난다.
+ *    이는 일시적 race 라서 잠깐 기다렸다 재시도하면(쓰기 완료 후) 성공한다(T2.8 production 실측).
+ *    launch 옵션(executablePath 추출 포함)은 1회만 계산하고, 재시도는 spawn 만 다시 한다.
+ */
+export async function launchBrowser(): Promise<Browser> {
+  const options = await buildLaunchOptions()
+  const maxAttempts = 3
+  let lastError: unknown
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await puppeteer.launch(options)
+    } catch (error) {
+      lastError = error
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes("ETXTBSY") && attempt < maxAttempts - 1) {
+        // 바이너리 쓰기가 끝나길 점증 backoff 로 대기(600ms, 1200ms).
+        await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)))
+        continue
+      }
+      throw error
+    }
+  }
+  throw lastError
 }
