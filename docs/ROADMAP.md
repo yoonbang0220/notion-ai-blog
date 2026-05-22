@@ -542,7 +542,9 @@
 
 ### 작업 항목
 
-#### ⬜ T3.1 — 관리자 인증 게이트 (선행 P0)
+#### ✅ T3.1 — 관리자 인증 게이트 (선행 P0)
+
+> ✅ **완료 (2026-05-22)**: `lib/admin-session.ts`(순수 Web Crypto HMAC-SHA256 sign/verifySession — proxy=Edge·Node 공유, server-only 미적용·R13)·`lib/admin-auth.ts`(server-only, `timingSafeEqual` 비번 비교·쿠키·`requireAdminSession` 2중검증)·`app/admin/login`(Server Action+`useActionState` 폼, 셸+Suspense·R15)·`app/admin/logout`·`proxy.ts`(matcher `["/q/:path*","/admin/:path*"]` + 미인증 redirect + noindex)·`.env.example` ADMIN_PASSWORD/ADMIN_SESSION_SECRET·`robots.txt` `Disallow:/admin`. 검증: `test:admin-auth` 5/5, tsc·lint·build(`/admin/login` ◐). Playwright: 미인증 차단(307→로그인)·로그인·잘못된 비번 인라인 에러·위조/만료 쿠키 차단 PASS. code-reviewer-kr 4.5/5, quick fix(C1 secure 쿠키 prod 한정·C2 secret 누락 로그·M1 robots `/admin/`·M2 경고 정리) 반영. 결정값: 인증=env 비번+서명 세션 쿠키·세션 30일·신규 npm install 0.
 
 - **추정**: L (1~2d) · **담당 영역**: BE / security · **테스트**: 단위/통합(`scripts/test/admin-auth.ts`) + Playwright E2E
 - **배경**: 목록·복사보다 **먼저** 성립해야 하는 보안 기반. PRD A.2/A.7 권장안 = 환경변수 비밀번호 + Web Crypto HMAC 서명 세션 쿠키. 신규 npm install 0.
@@ -577,7 +579,9 @@
   - ⚠️ 쿠키 `path` 범위 — `path:"/"` 권장(로그아웃·재방문 일관). PRD A.7 의 `path:"/admin"` 도 가능하나 로그아웃 삭제 경로와 반드시 일치시킬 것.
   - ⚠️ 운영자 결정(인증 방식) 미확정 시 본 태스크는 권장안 기준으로 착수하되, 확정 후 차이를 반영. Basic Auth/Vercel 보호 채택 시 2~6단계가 대폭 축소·변경.
 
-#### ⬜ T3.2 — 견적 목록 페치 `queryPublishedQuotes()`
+#### ✅ T3.2 — 견적 목록 페치 `queryPublishedQuotes()`
+
+> ✅ **완료 (2026-05-22)**: `lib/quotes.ts::queryPublishedQuotes()` — 기존 `resolveDataSourceId`/`PROP`/`STATUS_PUBLISHED_KO`/`getFormulaString` 재사용(신규 Notion 속성 0), `start_cursor` 페이지네이션 전수 + 발행일 내림차순(코드측 null 맨뒤 안정화), **6필드 경량**(항목/합계/notes 미페치 — N+1 방지)·`types/index.ts::QuoteListItem`·`scripts/test/admin-quotes.ts`·`package.json` 스크립트. 검증: `test:admin-quotes` 5/5(정상 발행 3건·6필드·내림차순 / 401 Unauthorized / 빈결과 / 페이지네이션 경계 page_size=1 합산일치 / 항목·합계 미페치 회귀가드).
 
 - **추정**: M (0.5~1d) · **담당 영역**: data / 비즈니스 로직 · **테스트**: 단위/통합(`scripts/test/admin-quotes.ts`)
 - **배경**: 관리자 목록의 데이터 소스. MVP 가정 "목록 함수 안 만든다" 를 변경. 기존 `lib/quotes.ts` 자산 재사용(신규 Notion 속성 0).
@@ -604,7 +608,9 @@
   - ⚠️ `발행일` 누락 행이 있으면 정렬 시 `null` 처리 순서 정의(맨 뒤로). Notion `sorts` 가 date null 을 어떻게 다루는지 실측 → 코드 정렬 폴백 고려.
   - ⚠️ 목록은 캐시 가능(`"use cache"` + `cacheLife("minutes")`)하지만, **인증 게이트 뒤**이므로 페이지 컴포넌트에서 캐시 범위를 지정한다(lib 모듈엔 캐시 지시자 두지 않음 — 기존 패턴 유지).
 
-#### ⬜ T3.3 — 관리자 견적 목록 페이지 `/admin`
+#### ✅ T3.3 — 관리자 견적 목록 페이지 `/admin`
+
+> ✅ **완료 (2026-05-22)**: `app/admin/page.tsx`(셸+Suspense resolver — `requireAdminSession` 2중검증 → `queryPublishedQuotes` → 목록, R15 대응으로 동적 데이터 Suspense 내부 → `/admin` ◐ Partial Prerender, metadata noindex, runtime/`"use cache"` export 미사용)·`components/admin/quote-list.tsx`(데스크톱 시맨틱 `<table>` ↔ 모바일 카드 `hidden sm:block`/`sm:hidden`, 6컬럼, StatusBadge·formatDate(TZ 시프트 회피)·누락 "-"·slug null 동작 비활성)·`quote-list-skeleton.tsx`. 글로벌 `ThemeToggle` 재사용. 검증: tsc·lint·build 통과. Playwright: 데스크톱 3건·발행일 내림차순 / 모바일 카드·가로 스크롤 0(360≤375) / 다크 토큰 정상 / 보안 회귀(쿠키 제거→`/admin/login`, 데이터 0) / 콘솔 0. code-reviewer-kr 4.5/5(Critical 0), W1 aria-label 반영.
 
 - **추정**: M (0.5~1d) · **담당 영역**: ui · **테스트**: Playwright E2E
 - **배경**: 인증 통과한 운영자에게 발행 견적을 테이블로 보여주는 화면. PRD A.5 와이어프레임 기준.
@@ -631,7 +637,9 @@
   - ⚠️ shadcn = `@base-ui/react`(Radix 아님). `table` 컴포넌트 필요 시 실제 파일 확인 또는 자체 `<table>` + 토큰. 폼/인터랙션 props 는 실제 파일에서 확인.
   - ⚠️ Next 16: `app/admin/page.tsx` 가 동적 데이터(인증·Notion)를 다루므로 셸+Suspense 패턴 검토(단, 인증 게이트로 정적 프리렌더 불가 → `cacheComponents` 충돌 여부 빌드로 실측).
 
-#### ⬜ T3.4 — 공유 링크 복사 버튼 `<CopyLinkButton>`
+#### ✅ T3.4 — 공유 링크 복사 버튼 `<CopyLinkButton>`
+
+> ✅ **완료 (2026-05-22)**: `components/admin/copy-link-button.tsx`("use client") — `navigator.clipboard.writeText(`${window.location.origin}/q/${slug}`)` → 성공 `toast.success("링크를 복사했습니다")`, 실패 시 `toast.error` + description URL fallback(권한 거부·비보안 컨텍스트, R14, 앱 크래시 0). origin=`window.location.origin`(배포/커스텀 도메인 자동, 결정 ③). `quote-list.tsx` [복사] 자리표시자 → `CopyLinkButton` 교체(slug 있을 때만 활성). sonner Toaster 재선언 0. 검증: Playwright **정상**(복사 클릭→`http://localhost:3000/q/<slug>` 캡처 + 토스트) + **실패**(writeText 강제 reject → "복사에 실패했습니다" 토스트) 둘 다 PASS, 콘솔 0. code-reviewer-kr 4.5/5(Critical 0, fallback 설계 양호 평가).
 
 - **추정**: S (<2h) · **담당 영역**: ui · **테스트**: Playwright E2E
 - **배경**: 고도화 Goal("링크 3초 복사")의 핵심 인터랙션. 클라이언트 컴포넌트.
@@ -652,7 +660,9 @@
   - ⚠️ `navigator.clipboard` 는 보안 컨텍스트(HTTPS/localhost)에서만 동작 → 실패 시 fallback 토스트(수동 복사 안내) 필수.
   - ⚠️ Playwright 에서 클립보드 검증은 컨텍스트 권한(`clipboard-read`/`clipboard-write`)이 필요할 수 있음 — 토스트 노출로 1차 검증, 클립보드 값 검증은 `browser_evaluate` 보조.
 
-#### ⬜ T3.5 — 다크모드 검증·문서화 (⚠️ 신규 빌드 아님)
+#### ✅ T3.5 — 다크모드 검증·문서화 (⚠️ 신규 빌드 아님)
+
+> ✅ **완료 (2026-05-22)**: 다크모드는 next-themes 기존 자산(신규 빌드 0). `docs/PHASE3_DARKMODE_NOTE.md` 작성(구성·검증결과·결론). 검증: Playwright(`emulateMedia` + `localStorage`) **시스템 추종·persist 4케이스 전부 PASS**(OS=dark·선호없음→다크 / OS=light·선호없음→라이트 / 저장 dark→OS 무관 다크 복원 / 저장 light→라이트 복원). `/admin`(T3.3)·`/admin/login`(스크린샷) 라이트/다크 토큰 기반 렌더 정상·콘솔 0. 신규 다크모드 자산(Provider/Toggle/토큰) 추가 0(과설계 회피, PRD A.6).
 
 - **추정**: S (<2h) · **담당 영역**: ui / qa · **테스트**: Playwright 시각 회귀
 - **배경**: ⚠️ **다크모드는 이미 구현됨**(실측 2026-05-22): `components/common/ThemeProvider.tsx`(next-themes 래퍼), `ThemeToggle.tsx`(`aria-label="테마 전환"`, Sun/Moon), `app/layout.tsx`(`attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange`, `<html lang="ko" suppressHydrationWarning>`), `app/globals.css`(`.dark` oklch 토큰 + `@custom-variant dark`). T2.6 에서 견적 페이지 다크 검증 완료. **본 태스크는 신규 개발이 아니라 검증·문서화 + 관리자 화면 일관 적용 확인.**
@@ -671,15 +681,15 @@
 
 ### Phase 3 완료 정의 (DoD)
 
-- [ ] T3.1~T3.5 모든 작업 항목 인수 조건 통과.
-- [ ] **T3.1(인증) 이 T3.3·T3.4 보다 먼저 완료·검증됨** — 미인증 `/admin` 노출 0(보안 게이트, R11).
-- [ ] `npm run build`·`tsc --noEmit`·`npm run lint` 무경고 통과(Cache Components 게이트 포함).
-- [ ] `tsx scripts/test/admin-auth.ts`(5 시나리오) + `tsx scripts/test/admin-quotes.ts`(5 시나리오) 모두 `=== 결과 요약 ===` fail 0.
-- [ ] Playwright E2E: 인증(미인증 차단·로그인·잘못된 비번) + 목록(데스크톱·모바일·다크) + 링크 복사(정상·실패) **전부 PASS**, 콘솔 에러 0.
-- [ ] `/admin/*` noindex 헤더 + `robots.txt` `Disallow: /admin` 검증.
-- [ ] 신규 npm install 0 유지(인증=Web Crypto, 복사=clipboard, UI=기존 자산). 신규 의존성 발생 시 결정사항으로 격상.
-- [ ] 코드 리뷰 통과(`code-reviewer-kr`).
-- [ ] **정의된 테스트 시나리오가 모두 통과**(단위/통합 스크립트 + Playwright MCP 실측).
+- [x] T3.1~T3.5 모든 작업 항목 인수 조건 통과. *(2026-05-22 전 항목 ✅)*
+- [x] **T3.1(인증) 이 T3.3·T3.4 보다 먼저 완료·검증됨** — 미인증 `/admin` 노출 0(보안 게이트, R11). *(게이트 실측: 미인증→307 로그인·유효세션→404·위조쿠키→로그인)*
+- [x] `npm run build`·`tsc --noEmit`·`npm run lint` 무경고 통과(Cache Components 게이트 포함). *(`/admin`·`/admin/login` ◐ Partial Prerender)*
+- [x] `tsx scripts/test/admin-auth.ts`(5 시나리오) + `tsx scripts/test/admin-quotes.ts`(5 시나리오) 모두 `=== 결과 요약 ===` fail 0. *(5/5 · 5/5)*
+- [x] Playwright E2E: 인증(미인증 차단·로그인·잘못된 비번) + 목록(데스크톱·모바일·다크) + 링크 복사(정상·실패) **전부 PASS**, 콘솔 에러 0. *(복사 실패 fallback: writeText 강제 reject→에러 토스트 실측)*
+- [x] `/admin/*` noindex 헤더 + `robots.txt` `Disallow: /admin` 검증. *(게이트 실측: x-robots-tag noindex + robots.txt)*
+- [x] 신규 npm install 0 유지(인증=Web Crypto, 복사=clipboard, UI=기존 자산). 신규 의존성 발생 시 결정사항으로 격상.
+- [x] 코드 리뷰 통과(`code-reviewer-kr`). *(T3.1·T3.2 4.5/5 / T3.3·T3.4 4.5/5)*
+- [x] **정의된 테스트 시나리오가 모두 통과**(단위/통합 스크립트 + Playwright MCP 실측).
 
 ### Phase 3 리스크
 
@@ -934,3 +944,4 @@ T3.1 (관리자 인증 게이트) 🔐 선행 P0 ─┬─ T3.2 (목록 페치, 
 | 2026-05-21 | **T2.7 완료** — app/error.tsx 전역 에러 경계 + lib/rate-limit.ts(PDF 10·revalidate 30/분, 429+Retry-After, best-effort) + Pretendard 서브셋 2MB→452KB. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9·rate-limit 5/5. code-reviewer-kr quick fix C2·M4·m1 반영(C1 오탐 판정). 잔여 W2=T2.8(배포)뿐 | quote-viewer-builder / code-reviewer-kr |
 | 2026-05-22 | **T2.8 배포(진행 중, ✅ 아님)** — Vercel GitHub 연동 배포 `notion-ai-blog-zeta.vercel.app`. 환경변수 4개·랜딩·견적 열람·noindex 정상 실측. **PDF production 3중 수정**: `serverExternalPackages`(8d4bac1) → `outputFileTracingIncludes` chromium bin(aefbd56) → `launchBrowser()` ETXTBSY 재시도(f14e6b8). 동시 5건 5/5 HTTP 200. **잔여**: 콜드스타트 15.3s(R4 판단)·이연 E2E E·I·revalidate prod E2E·Lighthouse | /git:docs:update-roadmap |
 | 2026-05-22 | **Phase 3 (v1.x 고도화) 신규 추가** — PRD 부록 A 기반 운영자 관리 화면(T3.1 인증 게이트·T3.2 `queryPublishedQuotes()`·T3.3 `/admin` 목록·T3.4 링크 복사·T3.5 다크모드 검증). 각 태스크 추정·의존성·DoD·테스트 계획(단위/통합 + Playwright MCP) 포함. 보안 게이트(R11: T3.1 선행, T3.3·T3.4 배포 차단) 명시. 기존 Phase 3(Future 매트릭스)→**Phase 4** 리네이밍, 관련 참조 갱신. 인증 방식 등 운영자 결정 5종(6~10번) 등록. 기존 Phase 0~2·측정후 백로그·리스크 보존(덮어쓰기 없음) | prd-roadmap-architect |
+| 2026-05-22 | **Phase 3 (T3.1~T3.5) 전체 완료 체크(증거 기반)** — 산출물 존재 + tsc·lint·build(`/admin`·`/admin/login` ◐) + `test:admin-auth` 5/5·`test:admin-quotes` 5/5 + Playwright 실측(인증 차단·로그인·잘못된 비번 / 목록 데스크톱 3건·모바일 카드 가로스크롤0·다크 / 보안 회귀 / 복사 정상·실패 fallback / 시스템추종·persist 4케이스) + code-reviewer-kr(T3.1·T3.2·T3.3·T3.4 각 4.5/5) 근거로 T3.1~T3.5 헤더 ✅·Phase 3 DoD 9/9 체크. CLAUDE.md 진행 상태 동기화. 커밋 80f3817·ca94da6·ed30ff3·a3a48bc | /git:docs:update-roadmap |
