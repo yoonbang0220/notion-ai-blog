@@ -1,6 +1,6 @@
 # ROADMAP — 노션 기반 견적서 웹뷰어 + PDF 다운로드 MVP
 
-> 최종 업데이트: 2026-05-17 | 기반 문서: `docs/QUOTE_VIEWER_PRD.md`
+> 최종 업데이트: 2026-05-22 | 기반 문서: `docs/QUOTE_VIEWER_PRD.md` (+ 부록 A. v1.x 고도화)
 > 도메인: 견적서 뷰어 (이전 블로그 도메인은 `docs/archive/` 에 보존)
 
 ## 📌 요약
@@ -19,7 +19,8 @@
 | Phase 0 (W0) | 도메인 전환 초기화 | 완료 | 블로그 자산 `docs/archive/` 이동, 새 `CLAUDE.md`, `/` 플레이스홀더, shadcn 7종 유지 |
 | Phase 1 (W1) | Notion `Quotes` 페치 + `/q/[slug]` 렌더 + 항목 표 파싱 + 합계 계산 | 파트타임 1주 (실작업 ~25h) | `lib/quotes.ts`, `app/q/[slug]/page.tsx`, `components/quote-view.tsx`, `scripts/test/quotes-client.ts` |
 | Phase 2 (W2) | PDF 라우트 + on-demand revalidate webhook + robots/noindex + Playwright E2E | 파트타임 1주 (실작업 ~25h) | `app/q/[slug]/pdf/route.ts`, `app/api/revalidate/route.ts`, `public/robots.txt`, 시드 견적 2건, E2E 회귀 리포트 |
-| Phase 3 (Future) | 10항목 우선순위 매트릭스 정렬 | 트리거 조건 발생 시 | 비밀번호 보호·자동 차단·열람 알림 등 (구현 보류) |
+| Phase 3 (W3) | v1.x 고도화 — 운영자 관리 화면(`/admin` 인증·견적 목록·링크 복사·다크모드 검증) | 파트타임 1주 (실작업 ~20h) | `lib/admin-auth.ts`, `app/admin/*`, `lib/quotes.ts::queryPublishedQuotes`, `components/admin/copy-link-button.tsx`, `scripts/test/admin-*.ts` |
+| Phase 4 (Future) | 10항목 우선순위 매트릭스 정렬 | 트리거 조건 발생 시 | 비밀번호 보호·자동 차단·열람 알림 등 (구현 보류) |
 
 > 📌 가정: 운영자 1인 파트타임. 실작업 시간은 캘린더 데이가 아닌 **"코드를 작성·검증하는 순수 시간"** 기준. 회의·디자인 검토·문서화 제외. 외부 의존성(Vercel/Notion 정상 동작)은 가용하다고 가정.
 
@@ -221,7 +222,7 @@
 - **테스트 계획**:
   - 단위 (`scripts/test/quotes-items.ts` 에 추가): 정상/만료/null 3 케이스에 `isQuoteExpired` 호출 → boolean 검증.
   - Playwright (T2.6): 만료 시드 견적(`regression-seed-expired`)으로 접속 → `browser_snapshot()` 에 만료 배너 텍스트 포함 확인.
-- **함정·메모**: 만료여도 페이지 노출은 허용(PRD 가정). 차단은 Future(Phase 3).
+- **함정·메모**: 만료여도 페이지 노출은 허용(PRD 가정). 차단은 Future(Phase 4).
 
 #### ✅ T1.8 — 랜딩 페이지 `/` 정식화 (운영자용 소개)
 
@@ -242,7 +243,7 @@
 - **테스트 계획**:
   - 빌드: `npm run build` → `/` 가 `○ (Static)`.
   - Playwright: `browser_navigate('/')` → `browser_snapshot()` 으로 소개 텍스트 확인, `browser_resize(375,667)` 모바일 깨짐 없음, 다크모드 스크린샷 1장.
-- **함정·메모**: 범위 최소 유지 — 과설계 금지. 운영자 전용 화면·인증·통계는 Future(Phase 3). 정적 페이지이므로 `"use cache"`/Suspense 불필요.
+- **함정·메모**: 범위 최소 유지 — 과설계 금지. 운영자 전용 화면·인증은 Phase 3(v1.x 고도화)에서, 통계 대시보드는 Future(Phase 4). 랜딩은 정적 페이지이므로 `"use cache"`/Suspense 불필요.
 
 ### Phase 1 완료 정의 (DoD)
 
@@ -459,6 +460,8 @@
 
 #### ⬜ T2.8 — Vercel 배포 + 도메인 연결 + 환경변수 등록 (+ production 실측 · 이연 E2E)
 
+> 🔄 **진행 중 (2026-05-22)**: GitHub 연동 배포 완료 — `notion-ai-blog-zeta.vercel.app`(커밋 f14e6b8). ✅ 랜딩·견적 열람·Notion 환경변수(4개)·noindex 헤더 정상(Playwright/curl 실측). ✅ **PDF production 동작** — 서버리스 Chromium 3중 수정으로 해결: (1) `serverExternalPackages` (2) `outputFileTracingIncludes` 로 chromium `/bin` 함수 포함 (3) `launchBrowser()` ETXTBSY 재시도(동시 추출 race). **동시 5건 요청 5/5 HTTP 200·application/pdf(~8s)**, 웜 4.3s. ⚠️ **잔여(미완 — ✅ 불가)**: ① 콜드스타트 **15.3s**(10초 목표 초과, R4 판단) ② 이연 E2E E(Draft→404)·I(revalidate 통합) production 실측 ③ revalidate webhook production E2E ④ Lighthouse 측정 ⑤ (선택) 커스텀 도메인.
+
 - **추정**: M (0.5~1d) · **담당 영역**: ops · **테스트**: 수동 체크리스트 + production 실측
 - **세부 단계**:
   1. Vercel 프로젝트 신규 생성, GitHub 리포지토리 연결.
@@ -469,11 +472,11 @@
   6. **이연 E2E 마무리(T2.6→여기)**: (E) Draft 전용 시드 추가 후 `/q/<draft-slug>` → 404 실측 / (I) production 캐시 hit → Notion 견적 필드(존재하는 필드, 예: 비고) 수정 → `POST /api/revalidate`(Bearer) → 5초 후 재방문 변경 반영 실측.
   7. **production 성능 실측(측정 우선)**: Lighthouse(LCP/TBT) + PDF 콜드스타트/핫 응답시간 측정 → 결과를 백로그 판단 근거로 기록.
 - **인수 조건**:
-  - production URL 에서 시드 견적 정상 열람.
-  - production 에서 PDF 다운로드 정상 (콜드스타트 포함 10초 이내).
-  - revalidate webhook 이 production 환경변수로 동작.
-  - 이연 E2E E(Draft→404)·I(revalidate 통합) production 실측 PASS.
-  - production 성능 수치(Lighthouse·PDF 응답시간) 기록 → 백로그 항목 선별.
+  - ✅ production URL 에서 시드 견적 정상 열람. *(2026-05-22 Playwright/curl 실측)*
+  - ⚠️ production 에서 PDF 다운로드 정상 — 동작 OK(동시 5/5 200·웜 4.3s·동시 ~8s)이나 **콜드스타트 15.3s 로 10초 목표 초과**(R4 판단 필요).
+  - ⬜ revalidate webhook 이 production 환경변수로 동작 — production E2E 미실측.
+  - ⬜ 이연 E2E E(Draft→404)·I(revalidate 통합) production 실측 PASS.
+  - ⬜ production 성능 수치 — PDF 응답시간 측정(콜드 15.3s/웜 4.3s/동시 ~8s) / Lighthouse 미측정.
 - **의존성**: T2.3, T2.4, T2.5, T2.6, T2.7
 - **테스트 계획**:
   - 체크리스트:
@@ -485,11 +488,11 @@
 
 ### Phase 2 완료 정의 (DoD)
 
-- [ ] T2.1~T2.8 모든 작업 항목 인수 조건 통과. *(T2.1~T2.7 ✅ 2026-05-21 / T2.8 배포 잔여)*
+- [ ] T2.1~T2.8 모든 작업 항목 인수 조건 통과. *(T2.1~T2.7 ✅ / T2.8 배포·PDF production 동작하나 이연 E·I·revalidate prod E2E·Lighthouse·콜드스타트 잔여)*
 - [x] `npm run build` 통과. *(2026-05-21: `/` Static · `/q/[slug]` PPR · `/q/[slug]/pdf`·`/api/revalidate` ƒ)*
 - [x] `npm run test:quotes`, `tsx scripts/test/pdf-route.ts`, `tsx scripts/test/revalidate.ts` 모두 통과. *(test:quotes 10/10 · pdf-route 5/5 · revalidate 9/9)*
 - [~] `docs/PHASE2_E2E_REPORT.md` 의 9개 시나리오. *(2026-05-21: dev 검증 7종 A·B·C·D·F·G·H PASS / E·I 는 production 필요로 T2.8 이연)*
-- [ ] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작. *(T2.8 잔여)*
+- [~] production URL 에서 시드 견적 열람 + PDF 다운로드 + revalidate 동작. *(2026-05-22: 열람 ✅ · PDF ✅(콜드 15.3s 단서) / revalidate prod E2E 미실측 — T2.8 잔여)*
 - [x] `robots.txt` + `X-Robots-Tag` 검증 통과. *(T2.5 — robots.txt Disallow + proxy.ts 헤더 + meta)*
 - [ ] **정의된 테스트 시나리오가 모두 통과 (Playwright MCP 실측 + 단위·통합 스크립트 + 수동 production 체크리스트)**.
 
@@ -512,7 +515,191 @@
 
 ---
 
-## Phase 3 (Future): 우선순위 매트릭스
+## Phase 3 (W3): v1.x 고도화 — 운영자 관리 화면
+
+> 기반 문서: `docs/QUOTE_VIEWER_PRD.md` **부록 A. v1.x 고도화 (2026-05-22)**. (2026-05-22 추가.)
+> ⚠️ 이 Phase 는 MVP(Phase 0~2) 완료·Vercel 배포 후 시작하는 **다음 개발 단계**다. PRD 본문(MVP)이 아닌 **부록 A** 가 SSOT.
+
+### 목표
+
+운영자(박상준)가 **인증으로 보호되는 `/admin` 화면**에서 발행된 견적 전체를 목록으로 보고, 각 견적의 **완성된 공유 링크를 1클릭으로 클립보드에 복사**할 수 있다. 동시에 이 화면은 인증 없이는 누구도 열 수 없어 **전체 견적 URL 목록이 외부에 유출되지 않는다**.
+
+> ⚠️ **MVP 가정 2건을 의도적으로 뒤집는다**(PRD 본문 각주): ① "운영자 전용 화면을 만들지 않는다" → `/admin` 도입. ② "목록 조회 함수를 만들지 않는다" → `queryPublishedQuotes()` 신규. 단 이는 **"목록 + 링크 복사"** 화면이며 "통계 대시보드"(여전히 Future, Phase 4)와는 별개다.
+
+### 🔐 보안 — 이 Phase 의 최상위 P0 (가장 중요)
+
+> **왜 인증이 선행되어야 하는가** — MVP 보안 모델은 "URL 자체가 비밀"(추측 불가 32자 slug)이다. `/admin` 목록은 **모든 견적의 공유 링크를 한 곳에 모아 노출**한다. 인증 없이 공개되면 **단 한 번의 접근으로 전체 견적 URL 이 통째로 유출**되어 MVP 보안 모델 전체가 붕괴한다.
+
+- ⚠️ **배포 게이트(절대 규칙)**: T3.3(목록 페이지)·T3.4(링크 복사)는 **T3.1(인증 게이트) 완료·검증 전에는 production 배포 금지**. 인증 없는 `/admin` 이 한 순간이라도 노출되면 전체 slug 유출. 의존성·DoD·리스크(R11)에 명시.
+- 인증과 무관하게 항상 적용: `/admin/*` 응답 `X-Robots-Tag: noindex, nofollow, noarchive`(proxy matcher 확장) + `robots.txt` `Disallow: /admin`. 비밀번호·세션 시크릿은 `NEXT_PUBLIC_` 금지(서버 전용), 비교는 타이밍 안전(`crypto.timingSafeEqual` 또는 동등). 로그인 실패 시 응답에 어떤 견적 정보도 포함 금지(목록 페치는 인증 통과 후에만 실행).
+
+### 📌 가정
+
+- 단일 운영자 MVP 성격(다중 사용자·역할 없음). **신규 npm install 0** 가정 — 인증=Web Crypto 내장, 복사=`navigator.clipboard`, UI=기존 shadcn(`field`/`input`/`button`)·sonner·next-themes 재사용.
+- 인증 방식은 PRD A.9 **권장안(환경변수 비번 + 서명 세션 쿠키)** 을 기본으로 본 로드맵에 작성하되, **운영자 확정 전까지 미확정**(아래 "결정 필요 항목 (Phase 3)" 참조). 대안(HTTP Basic Auth / Vercel 플랫폼 보호) 채택 시 T3.1 의 세부 구현이 바뀐다.
+- 신규 Notion 속성 0 — 관리자 목록이 쓰는 6필드(title·clientCompany·quoteNumber·issuedAt·status·slug)는 `types/index.ts` 의 기존 `Quote` 타입에 모두 존재(실측 2026-05-22).
+- 실작업 추정(파트타임): 약 1주(~20h). 인증(L)이 무게중심. 다크모드(T3.5)는 검증·문서화라 작다.
+
+### 작업 항목
+
+#### ⬜ T3.1 — 관리자 인증 게이트 (선행 P0)
+
+- **추정**: L (1~2d) · **담당 영역**: BE / security · **테스트**: 단위/통합(`scripts/test/admin-auth.ts`) + Playwright E2E
+- **배경**: 목록·복사보다 **먼저** 성립해야 하는 보안 기반. PRD A.2/A.7 권장안 = 환경변수 비밀번호 + Web Crypto HMAC 서명 세션 쿠키. 신규 npm install 0.
+- **세부 단계**:
+  1. `lib/admin-auth.ts` 신규(첫 줄 `import "server-only"`): `signSession()` / `verifySession()` — Web Crypto `crypto.subtle` HMAC-SHA256 으로 `{ iat, exp }` 페이로드 서명·검증. `ADMIN_SESSION_SECRET`(env) 사용. 비번 비교는 타이밍 안전(`crypto.timingSafeEqual`).
+  2. `/admin/login` 로그인 처리(Route Handler `app/admin/login/route.ts` 또는 Server Action): 입력 비번 ⟷ `ADMIN_PASSWORD`(env) 타이밍 안전 비교 → 일치 시 `cookies().set("admin_session", token, { httpOnly:true, secure:true, sameSite:"lax", path:"/", maxAge:… })`. 불일치 시 인라인 에러("비밀번호가 올바르지 않습니다.").
+  3. `app/admin/login/page.tsx` 로그인 폼(`"use client"` 최소 범위 or 폼 컴포넌트 분리). shadcn `field`/`input`/`button` 재사용. `/admin/login` 은 공개(인증 게이트 진입점).
+  4. `proxy.ts` matcher 확장 — 현재 `/q/:path*` 뿐 → **`["/q/:path*", "/admin/:path*"]`**. `/admin`(단 `/admin/login` 제외)에서 `cookies()` 로 세션 읽어 `verifySession()` → 실패 시 `NextResponse.redirect("/admin/login")`. 동시에 `/admin/*` 응답에 `X-Robots-Tag: noindex, nofollow, noarchive`.
+  5. **2중 검증(낙관적 게이트 보완)**: proxy 는 1차 차단만 담당. `/admin` 서버 컴포넌트 진입 시 `queryPublishedQuotes()` 호출 **전에 서버에서 세션 재검증**(proxy 우회·쿠키 조작 대비). 실패 시 `redirect("/admin/login")`.
+  6. 로그아웃(`app/admin/logout` Route Handler 또는 Server Action): 세션 쿠키 삭제 → `/admin/login` 이동. (P1 — Goal 검증엔 불필요하나 권장안 채택 시 함께 구현.)
+  7. `robots.txt` 에 `Disallow: /admin` 추가. `.env.example` 에 `ADMIN_PASSWORD` / `ADMIN_SESSION_SECRET` 블록 추가(PRD A.12).
+- **인수 조건**:
+  - 미인증 상태로 `/admin` 직접 접근 → `/admin/login` 으로 리다이렉트(견적 정보 응답 0).
+  - `/admin/login` 에 올바른 비번 입력 → 세션 쿠키 발급 + `/admin` 진입 성공.
+  - 잘못된 비번 입력 → 인라인 에러, 쿠키 미발급.
+  - 위조·만료 쿠키로 `/admin` 접근 → `/admin/login` 리다이렉트(`verifySession` 실패).
+  - `/admin/*` 응답에 `x-robots-tag: noindex, nofollow, noarchive` + `robots.txt` 에 `/admin` Disallow.
+- **의존성**: 없음(이 Phase 의 선행 작업). ⚠️ T3.3·T3.4 의 **선행 차단 조건**.
+- **테스트 계획** — `scripts/test/admin-auth.ts`(인라인 복제 패턴, `server-only` 모듈 직접 import 금지 → 서명·검증 로직 동치 복제 또는 Web Crypto 직접 호출):
+  - **시나리오 1 (정상)**: `verifySession(signSession(payload))` → true, 페이로드 복원 일치.
+  - **시나리오 2 (실패: 인증 누락/오류)**: 쿠키 없음 → 미인증 판정(=리다이렉트 대상). 잘못된 비번 비교 → 불일치.
+  - **시나리오 3 (실패: 위조 서명)**: 시크릿 다른 키로 서명한 토큰 / payload 변조 토큰 → `verifySession` false.
+  - **시나리오 4 (엣지: 세션 만료)**: `exp` 가 과거인 토큰 → `verifySession` false.
+  - **시나리오 5 (엣지: 타이밍 안전 비교)**: 동일 길이·1글자 차이 비번 → 불일치 + 비교가 `timingSafeEqual` 경유(early-return 비교 아님) 확인.
+  - **Playwright E2E**(T3.3 정비 후 통합):
+    - 미인증: `mcp__playwright__browser_navigate('/admin')` → `mcp__playwright__browser_snapshot()` 으로 로그인 폼 노출(목록 미노출) 확인.
+    - 로그인: `mcp__playwright__browser_navigate('/admin/login')` → `mcp__playwright__browser_fill_form`(비밀번호) → `mcp__playwright__browser_click`(로그인) → `browser_snapshot()` 으로 `/admin` 목록 진입 확인.
+    - 잘못된 비번: 틀린 값 입력 → `browser_snapshot()` 에 "비밀번호가 올바르지 않습니다." 인라인 에러.
+- **함정·메모**:
+  - ⚠️ `proxy.ts`(구 middleware) 의 `config.matcher` 는 빌드 타임 정적 분석 대상 — 정적 배열로 작성. 현재 `"/q/:path*"` → `["/q/:path*", "/admin/:path*"]`.
+  - ⚠️ Web Crypto `crypto.subtle` 는 Node/Edge 양쪽 동작(신규 의존성 0). proxy 는 Edge 런타임 가능성 → Node 전용 API(`crypto.timingSafeEqual` 등) 사용 위치는 서버 컴포넌트/Route Handler(Node) 로 한정하고, proxy 에서는 Web Crypto 기반 검증만 수행.
+  - ⚠️ 쿠키 `path` 범위 — `path:"/"` 권장(로그아웃·재방문 일관). PRD A.7 의 `path:"/admin"` 도 가능하나 로그아웃 삭제 경로와 반드시 일치시킬 것.
+  - ⚠️ 운영자 결정(인증 방식) 미확정 시 본 태스크는 권장안 기준으로 착수하되, 확정 후 차이를 반영. Basic Auth/Vercel 보호 채택 시 2~6단계가 대폭 축소·변경.
+
+#### ⬜ T3.2 — 견적 목록 페치 `queryPublishedQuotes()`
+
+- **추정**: M (0.5~1d) · **담당 영역**: data / 비즈니스 로직 · **테스트**: 단위/통합(`scripts/test/admin-quotes.ts`)
+- **배경**: 관리자 목록의 데이터 소스. MVP 가정 "목록 함수 안 만든다" 를 변경. 기존 `lib/quotes.ts` 자산 재사용(신규 Notion 속성 0).
+- **세부 단계**:
+  1. `lib/quotes.ts` 에 `queryPublishedQuotes(): Promise<QuoteListItem[]>` 추가. 기존 `resolveDataSourceId()` 재사용(v5 2단계 패턴).
+  2. `dataSources.query` 에 `filter: { property: PROP.status, select: { equals: STATUS_PUBLISHED_KO } }` + `start_cursor` 페이지네이션으로 발행 견적 **전체** 조회. ⚠️ `getQuoteBySlug` 와 달리 slug 로 필터하지 않으므로 formula 필터 불가 함정과 무관(각 행 slug 는 `getFormulaString` 으로 읽기만).
+  3. 정렬: `발행일`(date) 내림차순(최신 우선). Notion `sorts: [{ property: PROP.issuedAt, direction: "descending" }]` 또는 코드 정렬.
+  4. 반환 타입 `QuoteListItem`(`types/index.ts` 신규): `{ slug, title, clientCompany, quoteNumber, issuedAt, status }` **6필드만**. ⚠️ **항목(Items)·합계·notes 페치 금지**(목록에 불필요 + N+1 호출 방지). 즉 `getQuoteItems`/`calculateTotals` 미호출.
+  5. 정합성(규칙 1~3 동일): 필수 속성 누락 행은 `console.warn` 후 목록에는 표시하되 누락 필드 `null`(UI 에서 "-"). slug 형식 위반(`SLUG_PATTERN` 불통과) 행은 `slug=null` 로 두어 UI 가 [복사] 비활성화 가능하게(잘못된 URL 복사 방지).
+- **인수 조건**:
+  - 발행 견적 N건 → `QuoteListItem[]` N건, 각 행 6필드 정규화, 발행일 내림차순.
+  - 발행 견적 0건 → 빈 배열(throw 금지).
+  - 항목·합계·notes 는 결과에 포함되지 않음(타입·페치 모두).
+  - 발행 견적이 100건 초과(페이지네이션 경계) → 누락 없이 전수 반환.
+- **의존성**: 없음(T3.1 과 병행 가능). T3.3 의 데이터 소스.
+- **테스트 계획** — `scripts/test/admin-quotes.ts`(인라인 복제 패턴. `lib/quotes.ts` 직접 import 금지 — `server-only` 가드. v5 SDK 직접 호출로 동치성 확보):
+  - **시나리오 1 (정상)**: `상태=발행` 시드 견적들 페치 → 배열 길이 ≥2, 각 행 slug 32자·title/clientCompany not-null, 발행일 내림차순 정렬 확인.
+  - **시나리오 2 (실패: 인증)**: 잘못된 `NOTION_TOKEN` → `APIErrorCode.Unauthorized` throw 캐치.
+  - **시나리오 3 (실패: 빈 결과)**: 발행 견적 0건 상황(또는 존재하지 않는 상태 필터) → 빈 배열, throw 없음.
+  - **시나리오 4 (엣지: 페이지네이션 경계)**: `page_size` 를 작게(예: 1) 강제해 `has_more` 경유 다중 페이지 → 합산 건수가 단일 페이지 호출과 일치(누락·중복 0). MVP 규모에서 100건 초과 시뮬레이션.
+  - **시나리오 5 (엣지: 항목/합계 미페치)**: 결과 객체에 `items`/`subtotal`/`total`/`notes` 키 부재 확인(목록 경량 보장, N+1 방지 회귀 가드).
+  - `=== 결과 요약 ===` 출력 + `process.exitCode`.
+- **함정·메모**:
+  - ⚠️ `발행일` 누락 행이 있으면 정렬 시 `null` 처리 순서 정의(맨 뒤로). Notion `sorts` 가 date null 을 어떻게 다루는지 실측 → 코드 정렬 폴백 고려.
+  - ⚠️ 목록은 캐시 가능(`"use cache"` + `cacheLife("minutes")`)하지만, **인증 게이트 뒤**이므로 페이지 컴포넌트에서 캐시 범위를 지정한다(lib 모듈엔 캐시 지시자 두지 않음 — 기존 패턴 유지).
+
+#### ⬜ T3.3 — 관리자 견적 목록 페이지 `/admin`
+
+- **추정**: M (0.5~1d) · **담당 영역**: ui · **테스트**: Playwright E2E
+- **배경**: 인증 통과한 운영자에게 발행 견적을 테이블로 보여주는 화면. PRD A.5 와이어프레임 기준.
+- **세부 단계**:
+  1. `app/admin/page.tsx`(서버 컴포넌트): 진입 즉시 **세션 재검증**(T3.1 5단계) → 실패 시 `redirect("/admin/login")`. 통과 시 `queryPublishedQuotes()` 호출.
+  2. 목록 테이블: 컬럼 = 제목 · 고객사 · 견적번호 · 발행일 · 상태 · 동작([열람] · [복사]). 헤더에 총 건수 + `ThemeToggle`(기존) + 로그아웃(T3.1).
+  3. 반응형: 데스크톱은 `<table>`, 모바일(<640px)은 행을 카드로 분해(`제목 / 고객사 / 발행일 / [열람] [복사]`). 가로 스크롤 0.
+  4. [열람] = `/q/[slug]` 새 탭(`target="_blank" rel="noopener"`, P1). [복사] = T3.4 의 `<CopyLinkButton slug={...} />`.
+  5. 누락 필드 "-" 표시, slug 형식 위반 행은 [복사] 비활성(T3.2 정합성과 연동).
+  6. 다크모드·토큰 일관(색 하드코딩 금지, oklch 토큰만). 폼·복잡 블록은 `components/admin/*` 로 분리(`app/admin/page.tsx` 는 얇은 래퍼).
+- **인수 조건**:
+  - 인증 통과 후 발행 견적이 테이블로 렌더(제목·고객사·견적번호·발행일·상태 정확).
+  - 모바일(<640px)에서 카드 분해 + 가로 스크롤 0.
+  - 다크모드/라이트모드 모두 가독성 유지.
+  - 콘솔 에러 0.
+  - ⚠️ 미인증 직접 접근 시 목록 데이터가 응답에 절대 포함되지 않음(T3.1 게이트 + 서버 재검증).
+- **의존성**: **T3.1(인증)**, **T3.2(목록 페치)**. ⚠️ T3.1 완료 전 배포 금지(R11).
+- **테스트 계획** — Playwright MCP:
+  - **정상(데스크톱)**: 로그인 후 `mcp__playwright__browser_resize(1280, 800)` → `mcp__playwright__browser_navigate('/admin')` → `mcp__playwright__browser_snapshot()` 으로 행별 제목·고객사·발행일 데이터 확인 → `mcp__playwright__browser_console_messages()` 에러 0.
+  - **반응형(모바일)**: `mcp__playwright__browser_resize(375, 667)` → `browser_snapshot()` 카드 분해 확인, 가로 스크롤 0(`browser_evaluate` 로 `document.documentElement.scrollWidth <= innerWidth`).
+  - **다크모드**: 테마 토글 후 `mcp__playwright__browser_take_screenshot({ fullPage: true, filename: 'admin-dark.png' })` 베이스라인.
+  - **보안 회귀**: 쿠키 삭제 후 `browser_navigate('/admin')` → `browser_snapshot()` 에 견적 데이터 없음 + 로그인 폼.
+- **함정·메모**:
+  - ⚠️ shadcn = `@base-ui/react`(Radix 아님). `table` 컴포넌트 필요 시 실제 파일 확인 또는 자체 `<table>` + 토큰. 폼/인터랙션 props 는 실제 파일에서 확인.
+  - ⚠️ Next 16: `app/admin/page.tsx` 가 동적 데이터(인증·Notion)를 다루므로 셸+Suspense 패턴 검토(단, 인증 게이트로 정적 프리렌더 불가 → `cacheComponents` 충돌 여부 빌드로 실측).
+
+#### ⬜ T3.4 — 공유 링크 복사 버튼 `<CopyLinkButton>`
+
+- **추정**: S (<2h) · **담당 영역**: ui · **테스트**: Playwright E2E
+- **배경**: 고도화 Goal("링크 3초 복사")의 핵심 인터랙션. 클라이언트 컴포넌트.
+- **세부 단계**:
+  1. `components/admin/copy-link-button.tsx` 신규(`"use client"`): props `slug: string` → 클릭 시 `navigator.clipboard.writeText(`${origin}/q/${slug}`)` → 성공 `toast.success("링크를 복사했습니다")`, 실패 `toast.error(...)`(권한 거부·비보안 컨텍스트 대비 fallback 안내).
+  2. origin 조립: **운영자 결정 필요**(아래) — `window.location.origin`(배포 도메인 자동) vs `NEXT_PUBLIC_APP_URL`(고정). `.env.example` 에 `NEXT_PUBLIC_APP_URL` 이미 존재 → 후자 채택 시 server prop 주입.
+  3. sonner `<Toaster>` 는 루트 레이아웃(`app/layout.tsx`)에 **이미 존재** → 재선언 금지(실측 2026-05-22).
+- **인수 조건**:
+  - [복사] 클릭 → 클립보드에 `https://…/q/<slug>` 정확히 기록 + "링크를 복사했습니다" 토스트.
+  - 클립보드 권한 거부·비보안 컨텍스트 → 에러 토스트(앱 크래시 0).
+  - slug 형식 위반 행은 버튼 비활성(잘못된 URL 복사 방지, T3.2·T3.3 연동).
+- **의존성**: **T3.3**(목록 페이지). (→ 전이적으로 T3.1 보안 게이트 선행 필수.)
+- **테스트 계획** — Playwright MCP:
+  - **정상**: 로그인 후 `mcp__playwright__browser_navigate('/admin')` → `mcp__playwright__browser_click`(특정 행 [복사]) → `mcp__playwright__browser_snapshot()` 으로 "링크를 복사했습니다" 토스트 확인 → `mcp__playwright__browser_evaluate` 로 `navigator.clipboard.readText()` 값이 `${origin}/q/<slug>` 와 일치 확인(Playwright clipboard 권한 부여 필요).
+  - **실패/엣지**: 클립보드 API 거부 시뮬레이션(`browser_evaluate` 로 `navigator.clipboard.writeText` 오버라이드 reject) → 에러 토스트 확인.
+  - **콘솔**: `mcp__playwright__browser_console_messages()` 에러 0.
+- **함정·메모**:
+  - ⚠️ `navigator.clipboard` 는 보안 컨텍스트(HTTPS/localhost)에서만 동작 → 실패 시 fallback 토스트(수동 복사 안내) 필수.
+  - ⚠️ Playwright 에서 클립보드 검증은 컨텍스트 권한(`clipboard-read`/`clipboard-write`)이 필요할 수 있음 — 토스트 노출로 1차 검증, 클립보드 값 검증은 `browser_evaluate` 보조.
+
+#### ⬜ T3.5 — 다크모드 검증·문서화 (⚠️ 신규 빌드 아님)
+
+- **추정**: S (<2h) · **담당 영역**: ui / qa · **테스트**: Playwright 시각 회귀
+- **배경**: ⚠️ **다크모드는 이미 구현됨**(실측 2026-05-22): `components/common/ThemeProvider.tsx`(next-themes 래퍼), `ThemeToggle.tsx`(`aria-label="테마 전환"`, Sun/Moon), `app/layout.tsx`(`attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange`, `<html lang="ko" suppressHydrationWarning>`), `app/globals.css`(`.dark` oklch 토큰 + `@custom-variant dark`). T2.6 에서 견적 페이지 다크 검증 완료. **본 태스크는 신규 개발이 아니라 검증·문서화 + 관리자 화면 일관 적용 확인.**
+- **세부 단계**:
+  1. **검증·문서화**: `defaultTheme="system"` OS 추종 동작 확인 + 선호 persist 확인(next-themes localStorage 키 `theme` 자동 저장 → 새 방문 복원). 결과를 짧게 문서화(예: `docs/PHASE3_DARKMODE_NOTE.md` 또는 E2E 리포트에 합산).
+  2. **선택적 폴리시 — 관리자 화면 일관 적용**: `/admin`·`/admin/login` 도 동일 토큰·기존 `ThemeToggle` 사용해 라이트/다크 안 깨지게(신규 토큰·신규 토글 만들지 않음. 기존 자산 재사용). ⚠️ 실제 토글 배선은 T3.3 헤더에서 수행 → 본 태스크는 결과 검증.
+- **인수 조건**:
+  - `/admin`·`/admin/login` 라이트/다크 모두 깨짐 없음(색 하드코딩 0, 토큰만).
+  - 시스템 테마 변경 시 추종, 새 방문 시 사용자 선호 복원.
+  - 신규 다크모드 자산(Provider/Toggle/토큰) 추가 0 — 기존 재사용만.
+- **의존성**: T3.3(관리자 화면 존재해야 일관 적용 검증 가능).
+- **테스트 계획** — Playwright MCP:
+  - 라이트/다크/시스템 3상태 회귀 스냅샷: `/admin/login` 과 `/admin`(로그인 후) 각각 `mcp__playwright__browser_take_screenshot({ fullPage: true })` 라이트·다크 2장씩 베이스라인.
+  - persist 검증: 다크 토글 → `mcp__playwright__browser_navigate`(재방문) → `browser_snapshot()` 으로 다크 유지 확인.
+- **함정·메모**: ⚠️ 과설계 금지 — 신규 다크모드 시스템을 만들지 않는다(PRD A.6 "이미 구현됨"). 범위는 검증 + 관리자 일관성뿐.
+
+### Phase 3 완료 정의 (DoD)
+
+- [ ] T3.1~T3.5 모든 작업 항목 인수 조건 통과.
+- [ ] **T3.1(인증) 이 T3.3·T3.4 보다 먼저 완료·검증됨** — 미인증 `/admin` 노출 0(보안 게이트, R11).
+- [ ] `npm run build`·`tsc --noEmit`·`npm run lint` 무경고 통과(Cache Components 게이트 포함).
+- [ ] `tsx scripts/test/admin-auth.ts`(5 시나리오) + `tsx scripts/test/admin-quotes.ts`(5 시나리오) 모두 `=== 결과 요약 ===` fail 0.
+- [ ] Playwright E2E: 인증(미인증 차단·로그인·잘못된 비번) + 목록(데스크톱·모바일·다크) + 링크 복사(정상·실패) **전부 PASS**, 콘솔 에러 0.
+- [ ] `/admin/*` noindex 헤더 + `robots.txt` `Disallow: /admin` 검증.
+- [ ] 신규 npm install 0 유지(인증=Web Crypto, 복사=clipboard, UI=기존 자산). 신규 의존성 발생 시 결정사항으로 격상.
+- [ ] 코드 리뷰 통과(`code-reviewer-kr`).
+- [ ] **정의된 테스트 시나리오가 모두 통과**(단위/통합 스크립트 + Playwright MCP 실측).
+
+### Phase 3 리스크
+
+- ⚠️ **R11. 인증 미완성 상태로 `/admin` 노출 → 전체 slug 유출** — 영향: 치명(MVP 보안 모델 붕괴). 가능성: 중간(작업 순서 실수). **완화**: T3.1 을 선행 P0 로 고정 + **T3.3·T3.4 는 T3.1 검증 전 production 배포 금지**(배포 게이트). proxy matcher + 서버 2중 검증.
+- ⚠️ **R12. 인증 방식 미확정(운영자 결정)** — 영향: T3.1 재작업. 가능성: 중간. **완화**: 권장안(env 비번 + 서명 쿠키)으로 착수하되 착수 전 운영자 확정 요청. 대안(Basic Auth/Vercel 보호)은 코드 구조가 달라 미리 분기 메모.
+- ⚠️ **R13. `proxy.ts` Edge 런타임 제약** — Node 전용 `crypto` API 가 proxy(Edge)에서 불가할 수 있음. **완화**: proxy 에서는 Web Crypto(`crypto.subtle`)만 사용, Node 전용 비교는 Route Handler/서버 컴포넌트(Node)로 한정. 빌드·런타임 실측.
+- ⚠️ **R14. `navigator.clipboard` 비보안 컨텍스트·권한 거부** — 영향: 복사 실패. 가능성: 낮음(production HTTPS). **완화**: 실패 시 fallback 토스트(수동 복사 안내). production 도메인은 HTTPS.
+- ⚠️ **R15. `cacheComponents` + 인증 동적 라우트 충돌** — `/admin` 은 인증으로 정적 프리렌더 불가 → 빌드 게이트 충돌 가능. **완화**: T3.3 빌드 실측, Suspense/`"use cache"` 범위 조정. (T2.3 의 runtime export 금지 함정과 동류.)
+
+### 결정 필요 항목 (Phase 3 — 운영자 확정 대기)
+
+1. ⚠️ **관리자 인증 방식**(최우선) — 권장: 환경변수 비번 + 서명 세션 쿠키(신규 의존성 0, 로그인 UX·로그아웃 제어). 대안: HTTP Basic Auth(코드 최소·UX 투박), Vercel 플랫폼 보호(코드 0·플랫폼 종속·유료 가능). **영향 태스크**: T3.1. **착수 전 확정 필요**(코드 구조가 갈림).
+2. ⚠️ **세션 만료(maxAge)** — 권장안 채택 시 쿠키 유효기간(7일 / 30일 / 브라우저 종료 시). 단일 운영자 본인 기기면 길게 무방. **영향 태스크**: T3.1.
+3. ⚠️ **공유 URL origin 조립** — `window.location.origin`(배포 도메인 자동) vs `NEXT_PUBLIC_APP_URL`(고정). production 도메인(`notion-ai-blog-zeta.vercel.app` 또는 커스텀) 확정 시 후자가 안전. **영향 태스크**: T3.4.
+4. ⚠️ **관리자 경로** — 기본안 `/admin`(+`/admin/login`). 변경 원하면 확정. **영향 태스크**: T3.1·T3.3·proxy matcher.
+5. ⚠️ **목록 노출 범위** — `상태=발행` 만(기본안, 공유 가능한 견적) vs `초안`·`보관` 도 상태 뱃지와 함께. **영향 태스크**: T3.2.
+
+---
+
+## Phase 4 (Future): 우선순위 매트릭스
 
 PRD `Future work` 10항목을 임팩트(1~5) - 노력(1~5) 점수로 정렬. 점수가 높을수록 우선. 트리거 조건은 "MVP 운영 중 어떤 신호가 보이면 다음 단계로 옮길지" 기준.
 
@@ -562,10 +749,28 @@ T2.6 (E2E)
   ↓
 T2.7 (Vercel 배포)
   ↓
+T2.8 (배포 + production 실측)
+  ↓
 [Phase 2 완료 = MVP launch]
+  ↓
+─────────── Phase 3 (v1.x 고도화) ───────────
+  ↓
+T3.1 (관리자 인증 게이트) 🔐 선행 P0 ─┬─ T3.2 (목록 페치, 병행 가능)
+  ↓                                  │
+  └──────────────┬───────────────────┘
+                 ↓
+        T3.3 (관리자 목록 페이지)   ⚠️ T3.1 검증 전 배포 금지
+                 ↓
+        T3.4 (링크 복사 버튼)       ⚠️ T3.1 검증 전 배포 금지
+                 ↓
+        T3.5 (다크모드 검증·문서화)
+                 ↓
+        [Phase 3 완료]
 ```
 
-**핵심 경로**: `T1.1 → T1.2 → T1.3 → T1.5 → T1.6 → T2.3 → T2.6 → T2.7`. 이 순서가 지연되면 launch 가 지연된다. T1.4/T1.7/T2.2/T2.4/T2.5 는 병행 처리해 일정 단축 가능.
+**핵심 경로(MVP)**: `T1.1 → T1.2 → T1.3 → T1.5 → T1.6 → T2.3 → T2.6 → T2.7`. 이 순서가 지연되면 launch 가 지연된다. T1.4/T1.7/T2.2/T2.4/T2.5 는 병행 처리해 일정 단축 가능.
+
+**핵심 경로(Phase 3)**: `T3.1(인증) → T3.3(목록) → T3.4(복사) → T3.5(다크모드)`. ⚠️ **보안 게이트**: T3.1 은 T3.3·T3.4 의 선행 차단 조건 — 인증 미완성 상태로 목록/복사를 배포하면 전체 견적 slug 가 유출된다(R11). T3.2(목록 페치)는 T3.1 과 병행 가능하나 화면 노출(T3.3)은 인증 뒤에서만.
 
 ---
 
@@ -590,6 +795,10 @@ T2.7 (Vercel 배포)
 | Phase 2 (W2) | revalidate webhook | `tsx scripts/test/revalidate.ts` | Playwright 통합 (T2.6 시나리오 I) |
 | Phase 2 (W2) | robots/noindex | Playwright `browser_network_request` + curl | metadata 검증 |
 | Phase 2 (W2) | E2E 회귀 | **Playwright MCP** (시나리오 A~I) | 베이스라인 스크린샷 |
+| Phase 3 (W3) | 관리자 인증(서명·검증·만료·타이밍 안전) | `tsx scripts/test/admin-auth.ts` | Playwright(미인증 차단·로그인·잘못된 비번) |
+| Phase 3 (W3) | 목록 페치 `queryPublishedQuotes` | `tsx scripts/test/admin-quotes.ts` | 수동 데이터 검수 |
+| Phase 3 (W3) | `/admin` 목록 UI + 링크 복사 | **Playwright MCP** (데스크톱·모바일·다크·복사·보안 회귀) | 베이스라인 스크린샷 |
+| Phase 3 (W3) | `/admin` noindex | Playwright `browser_network_request` + curl | robots.txt 검증 |
 
 ### Playwright MCP 함수 베이스라인
 
@@ -610,6 +819,7 @@ T2.7 (Vercel 배포)
 - 슬러그는 실제 nanoid(32자) 사용. 식별은 Notion `Title` 의 `[regression-seed-*]` 접두로.
 - 시드 수정은 운영자가 Notion UI 에서 수행. 자동화 금지.
 - Playwright 시나리오는 항상 시드 우선 사용 (임시 견적은 불안정).
+- **Phase 3(관리자 목록)용**: 위 2건이 모두 `상태=발행` 이므로 `queryPublishedQuotes()`·`/admin` 목록 검증에 그대로 재사용한다(목록에 최소 2행 노출). 발행일 내림차순 정렬·페이지네이션 경계는 단위 스크립트(`admin-quotes.ts`)에서 `page_size` 축소로 검증(시드 추가 불필요).
 
 ---
 
@@ -622,6 +832,8 @@ T2.7 (Vercel 배포)
 | Phase 2 E2E | T2.6 완료 | Playwright 시나리오 A~I PASS율 | 9/9 (100%) |
 | Phase 2 production | T2.7 완료 | production PDF 응답 시간 | 콜드 10s, 핫 3s 이내 |
 | MVP launch | W2 종료 | 운영자가 견적 1건 5분 안에 발행 → 클라이언트가 PDF 다운로드 성공 | 1회 시연 성공 |
+| Phase 3 인증 | T3.1 완료 | `admin-auth.ts` PASS + 미인증 `/admin` 차단(Playwright) | 5/5 + 차단 100% |
+| Phase 3 완료 | W3 종료 | 운영자가 `/admin` 로그인 → 목록에서 공유 링크 1클릭 복사 | 3초 이내 복사 1회 시연 + slug 유출 0 |
 
 ---
 
@@ -634,6 +846,8 @@ T2.7 (Vercel 배포)
 - **`@sparticuz/chromium` + `puppeteer-core`** — PDF 생성. T2.3 에 의존. ⚠️ 패키지 버전 매트릭스 확인 필수.
 - **Pretendard (또는 Noto Sans KR)** — 한글 폰트. T2.2 에 의존.
 - **Make/Zapier (선택)** — Notion 변경 webhook 트리거. T2.4 운영자 측 설정.
+- **Web Crypto (`crypto.subtle`) — 내장** — 관리자 세션 HMAC 서명·검증. T3.1 에 의존. ⚠️ **신규 npm install 0**(Node/Edge 내장).
+- **`navigator.clipboard` — 브라우저 내장** — 공유 링크 복사. T3.4 에 의존. ⚠️ 보안 컨텍스트(HTTPS/localhost) 전용.
 
 ### 신규 npm 의존성 (설치 시점)
 
@@ -644,6 +858,8 @@ T2.7 (Vercel 배포)
 | `@sparticuz/chromium` | 정확 버전 고정 (`puppeteer-core` 호환 확인) | T2.1 시작 시 | Vercel Function용 Chromium |
 
 > 📌 가정: 위 외 모든 의존성은 W0 초기화 시점에 이미 설치됨. 추가 라이브러리(예: `fuse.js`, `algoliasearch`)는 MVP 범위 밖.
+>
+> 📌 **Phase 3 신규 npm install 0 가정**: 인증=Web Crypto(내장), 복사=`navigator.clipboard`(내장), UI=기존 shadcn(`field`/`input`/`button`)·sonner·next-themes 재사용. 신규 의존성이 불가피하면 결정사항으로 격상해 운영자 확인 후 설치(예: 세션 라이브러리 `jose` 등은 권장안에 불필요).
 
 ---
 
@@ -661,12 +877,19 @@ T2.7 (Vercel 배포)
 | R8 | Notion `file.url` 1시간 만료 | 이미지 깨짐 | 낮음 (MVP는 텍스트 위주) | `<img>` 금지 + `next/image` 의무화. 이미지는 Future | Phase 1 |
 | R9 | 운영자가 슬러그를 32자 미만으로 입력 | URL 보안 약화 | 중간 | T1.2 페치 단계에서 형식 검증 → 404 (PRD 정합성 규칙 3) | Phase 1 |
 | R10 | 중복 slug 시 빌드 실패가 너무 강함 | 잘못된 견적 1건 때문에 전체 차단 | 낮음 | PRD 정합성 규칙 1 의도된 동작 — 데이터 손상 신호로 즉시 운영자에게 알림 | Phase 1 |
+| R11 | 인증 미완성 상태로 `/admin` 노출 → 전체 slug 유출 | 치명(보안 모델 붕괴) | 중간 | T3.1 선행 P0 고정 + T3.3·T3.4 는 T3.1 검증 전 배포 금지(배포 게이트) + 서버 2중 검증 | Phase 3 |
+| R12 | 관리자 인증 방식 미확정(운영자 결정) | T3.1 재작업 | 중간 | 권장안(env 비번 + 서명 쿠키)으로 착수, 착수 전 운영자 확정 요청, 대안 분기 메모 | Phase 3 |
+| R13 | `proxy.ts` Edge 런타임에서 Node `crypto` API 불가 | 세션 검증 실패 | 중간 | proxy 는 Web Crypto(`crypto.subtle`)만, Node 전용 비교는 Route Handler/서버 컴포넌트로 한정 | Phase 3 |
+| R14 | `navigator.clipboard` 비보안 컨텍스트·권한 거부 | 복사 실패 | 낮음(prod HTTPS) | 실패 시 fallback 토스트(수동 복사 안내) | Phase 3 |
+| R15 | `cacheComponents` + 인증 동적 라우트 빌드 충돌 | `/admin` 빌드 실패 | 중간 | T3.3 빌드 실측, Suspense/`"use cache"` 범위 조정(T2.3 runtime export 함정과 동류) | Phase 3 |
 
 ---
 
-## 🤔 결정 필요 항목 (PRD 자가검증 5종 — 사용자 확정 대기)
+## 🤔 결정 필요 항목 (운영자 확정 대기)
 
-본 로드맵은 PRD 의 "기본안" 을 채택했지만, 운영자가 다음 5종 결정을 확정해야 일부 태스크가 최종 형태를 갖는다. ⚠️ 표시.
+본 로드맵은 PRD 의 "기본안/권장안" 을 채택했지만, 운영자가 다음 결정을 확정해야 일부 태스크가 최종 형태를 갖는다. ⚠️ 표시.
+
+### MVP (Phase 1·2) — PRD 자가검증 5종
 
 1. ⚠️ **PDF 생성 방식**: 기본안 = `@sparticuz/chromium` + `puppeteer-core`. 대안 = `window.print()` + 인쇄 전용 CSS.
    - **영향 태스크**: T2.1, T2.3.
@@ -681,8 +904,18 @@ T2.7 (Vercel 배포)
    - **영향 태스크**: T1.3.
    - **결정 기준**: 운영자 사업 형태.
 5. ⚠️ **만료 견적 정책**: 기본안 = 열람 허용 + 배너 표시. 대안 = 410 차단을 P0 로 승격.
-   - **영향 태스크**: T1.7. Phase 3 의 1순위(자동 차단)를 MVP로 끌어올리는 결정.
+   - **영향 태스크**: T1.7. Phase 4(Future) 의 1순위(자동 차단)를 MVP로 끌어올리는 결정.
    - **결정 기준**: 결재용 정합성 사고 위험도.
+
+### Phase 3 (v1.x 고도화) — PRD 부록 A.9 기반 5종
+
+> 상세는 본 문서 "Phase 3 → 결정 필요 항목 (Phase 3 — 운영자 확정 대기)" 절 참조. 요약:
+
+6. ⚠️ **관리자 인증 방식**(최우선): 권장 = 환경변수 비번 + 서명 세션 쿠키(신규 의존성 0). 대안 = HTTP Basic Auth / Vercel 플랫폼 보호. **영향**: T3.1. **착수 전 확정 필요**.
+7. ⚠️ **세션 만료(maxAge)**: 7일 / 30일 / 브라우저 종료 시. **영향**: T3.1.
+8. ⚠️ **공유 URL origin 조립**: `window.location.origin`(자동) vs `NEXT_PUBLIC_APP_URL`(고정). **영향**: T3.4.
+9. ⚠️ **관리자 경로**: 기본안 `/admin`(+`/admin/login`). **영향**: T3.1·T3.3·proxy matcher.
+10. ⚠️ **목록 노출 범위**: `상태=발행` 만(기본안) vs `초안`·`보관` 포함. **영향**: T3.2.
 
 ---
 
@@ -699,3 +932,5 @@ T2.7 (Vercel 배포)
 | 2026-05-21 | **T2.6 완료** — Playwright MCP E2E 7종(A·B·C·D·F·G·H) PASS, 콘솔 0·버그 0. `docs/PHASE2_E2E_REPORT.md` 작성. E(Draft→404)·I(revalidate 통합)는 production 필요로 이연 | qa-engineer |
 | 2026-05-21 | **W2 재구성**(사용자 결정, "최소" 구조) — 신규 **T2.7 배포 전 하드닝**(error.tsx 전역 에러 경계·PDF/revalidate 레이트리밋·폰트 서브셋) 삽입, 기존 배포는 **T2.8**(+이연 E2E E·I·production 성능 실측)로 번호 이동. 추가 성능·보안헤더·분산 리밋은 측정 후 백로그. Phase 2 = T2.1~T2.8 | 사용자 요청 |
 | 2026-05-21 | **T2.7 완료** — app/error.tsx 전역 에러 경계 + lib/rate-limit.ts(PDF 10·revalidate 30/분, 429+Retry-After, best-effort) + Pretendard 서브셋 2MB→452KB. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9·rate-limit 5/5. code-reviewer-kr quick fix C2·M4·m1 반영(C1 오탐 판정). 잔여 W2=T2.8(배포)뿐 | quote-viewer-builder / code-reviewer-kr |
+| 2026-05-22 | **T2.8 배포(진행 중, ✅ 아님)** — Vercel GitHub 연동 배포 `notion-ai-blog-zeta.vercel.app`. 환경변수 4개·랜딩·견적 열람·noindex 정상 실측. **PDF production 3중 수정**: `serverExternalPackages`(8d4bac1) → `outputFileTracingIncludes` chromium bin(aefbd56) → `launchBrowser()` ETXTBSY 재시도(f14e6b8). 동시 5건 5/5 HTTP 200. **잔여**: 콜드스타트 15.3s(R4 판단)·이연 E2E E·I·revalidate prod E2E·Lighthouse | /git:docs:update-roadmap |
+| 2026-05-22 | **Phase 3 (v1.x 고도화) 신규 추가** — PRD 부록 A 기반 운영자 관리 화면(T3.1 인증 게이트·T3.2 `queryPublishedQuotes()`·T3.3 `/admin` 목록·T3.4 링크 복사·T3.5 다크모드 검증). 각 태스크 추정·의존성·DoD·테스트 계획(단위/통합 + Playwright MCP) 포함. 보안 게이트(R11: T3.1 선행, T3.3·T3.4 배포 차단) 명시. 기존 Phase 3(Future 매트릭스)→**Phase 4** 리네이밍, 관련 참조 갱신. 인증 방식 등 운영자 결정 5종(6~10번) 등록. 기존 Phase 0~2·측정후 백로그·리스크 보존(덮어쓰기 없음) | prd-roadmap-architect |

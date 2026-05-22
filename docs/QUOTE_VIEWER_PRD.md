@@ -1,8 +1,13 @@
-# 노션 기반 견적서 웹뷰어 + PDF 다운로드 MVP PRD
+# 노션 기반 견적서 웹뷰어 + PDF 다운로드 PRD
 
-> 작성일: 2026-05-17
+> 작성일: 2026-05-17 (MVP) · 2026-05-22 (v1.x 고도화 추가)
 > 작성자: prd-generator-kr (시니어 서비스 기획자)
 > 양식 출처: `docs/MVP PRD 양식.md`, 스타일 참고: `docs/NOTION_BLOG_PRD.md`
+
+> **문서 구성 안내**
+> - 본 문서의 **본문(Overview ~ 자가 검증)** 은 **MVP** (2026-05-17 작성, W0~W2 구현·Vercel 배포 완료. production: `notion-ai-blog-zeta.vercel.app`) 내용이다. **수정하지 않고 그대로 보존**한다.
+> - 문서 맨 아래 **[부록 A. v1.x 고도화](#부록-a-v1x-고도화-2026-05-22)** 섹션이 MVP **이후** 추가되는 고도화 기능 3종(관리자 견적 목록 / 목록 내 링크 복사 / 다크모드 검증)을 담는다.
+> - ⚠️ v1.x 의 **관리자 견적 목록** 기능은 MVP 의 핵심 가정 2가지("운영자 전용 화면을 만들지 않는다", "목록 조회 함수를 만들지 않는다")를 의도적으로 뒤집는다. 상세는 부록 A 참조.
 
 ---
 
@@ -129,6 +134,8 @@ Notion 원본 UI는 노출되지 않으며, 견적서 전용 레이아웃으로 
 ```
 
 > MVP에서는 운영자 전용 화면(로그인·대시보드)을 만들지 않는다. 운영자는 Notion에서만 작업한다.
+>
+> 〔v1.x 변경〕 위 가정은 **부록 A. v1.x 고도화** 에서 뒤집힌다 — 인증으로 보호되는 운영자용 `/admin` 견적 목록 화면을 도입한다. (단, "대시보드(통계)" 가 아니라 "목록 + 링크 복사" 다. 통계 대시보드는 여전히 Future.)
 
 ### Wire-frame (텍스트 와이어)
 
@@ -174,7 +181,7 @@ Notion 원본 UI는 노출되지 않으며, 견적서 전용 레이아웃으로 
 
 **2. 콘텐츠 페치 레이어**
 - `lib/quotes.ts` 신규 (기존 `lib/notion.ts` 패턴 재사용).
-- 함수: `getQuoteBySlug(slug)` 1개로 시작. 목록 조회는 운영자가 Notion에서 직접 보면 되므로 만들지 않는다.
+- 함수: `getQuoteBySlug(slug)` 1개로 시작. 목록 조회는 운영자가 Notion에서 직접 보면 되므로 만들지 않는다. 〔v1.x 변경〕 부록 A 에서 관리자 견적 목록을 위해 목록 페치 함수 `queryPublishedQuotes()` 를 신규 추가한다.
 - `server-only` 가드 + `requireEnv` 헬퍼 동일하게 적용.
 - 캐시: 견적 페이지에서 `"use cache"` + `cacheLife("minutes")`. 수정 즉시 반영이 필요한 경우 on-demand revalidate webhook 사용.
 
@@ -327,3 +334,231 @@ Notion 원본 UI는 노출되지 않으며, 견적서 전용 레이아웃으로 
 3. **견적 항목 표 위치**: 본 PRD는 "Notion page body의 첫 `table` 블록" 을 가정했다. 대신 child DB로 분리할지 결정 필요 — child DB 채택 시 운영자가 항목 재사용은 편해지지만 권한 연결·페치 호출이 추가된다.
 4. **부가세 기본값**: 10%를 디폴트로 가정했다. 면세사업자·해외 거래 등 0% 케이스 빈도에 따라 디폴트 변경 가능.
 5. **만료 견적 정책**: MVP는 "만료돼도 열람은 허용 + 배너만 표시" 다. 사내 결재가 끝난 뒤에도 클라이언트가 옛 견적을 재이용하는 사고를 막으려면 410 차단을 P0로 올릴지 결정 필요.
+
+---
+---
+
+# 부록 A. v1.x 고도화 (2026-05-22)
+
+> 이 부록은 **MVP(W0~W2) 가 빌드·Vercel 배포·PDF 동작까지 완료된 이후** 추가하는 고도화 기능을 담는다. 위 본문(MVP)은 그대로 보존되며, 여기서부터가 다음 개발 단계(가칭 W3~)의 범위다.
+>
+> **고도화 3종**
+> 1. 관리자 레이아웃 — 견적 목록 (NEW, 큰 변경 · 인증 게이트 필수)
+> 2. 견적 목록에서 공유 링크 복사 (위 1의 하위 인터랙션)
+> 3. 다크모드 — ⚠️ **이미 구현됨**. 신규 개발 아님. 검증·문서화 + 선택적 폴리시만.
+>
+> ⚠️ 본 부록은 MVP 의 Future 목록(비밀번호 보호·자동 410·열람 알림·버전 히스토리·전자서명·브랜드 커스터마이즈·다국어·**대시보드(통계)**·멀티테넌트)을 **건드리지 않는다**. 그 항목들은 여전히 Future 다. 특히 v1.x 의 "관리자 견적 목록" 은 **목록 + 링크 복사** 이지 "통계 대시보드" 가 아니다 — 둘은 별개 기능이다.
+
+## A.1 Overview (고도화)
+
+### What
+운영자(박상준)가 **발행된 견적 전체를 한 화면에서 목록으로** 보고, 각 견적의 **공유 링크를 버튼 한 번으로 복사**할 수 있는 **인증으로 보호되는 관리자 화면(`/admin`)** 을 추가한다.
+다크모드는 이미 구현돼 있으므로(아래 A.6) 신규 개발 대상이 아니라 **검증·문서화 + 관리자 화면 일관 적용** 만 다룬다.
+
+### Who
+- **운영자(박상준)** — 본문 페르소나 P1 그대로. 월 5~10건의 견적을 발행하며, 지금까지는 공유 링크를 Notion 에서 직접 찾아 복사했다. 발행 건수가 쌓이면서 "어떤 견적을 누구에게 보냈는지, 링크가 무엇인지" 를 Notion 행을 일일이 열어 확인하는 비용이 커졌다.
+- (클라이언트 페르소나 P2 는 이 고도화의 대상이 아니다. `/admin` 은 운영자 전용이며 클라이언트는 접근하지 않는다.)
+
+### Why
+- 운영자: MVP 기준 "목록은 Notion 에서 보면 된다" 였지만, Notion 의 견적 행에는 **클라이언트에게 보낼 실제 공유 URL(`/q/<slug>`) 이 그대로 보이지 않는다**(slug 는 Formula 값이고, 도메인을 붙인 완성 URL 은 운영자가 머릿속에서 조립해야 함). 발행 견적이 늘면 "이 고객 견적의 링크가 뭐였지?" 를 매번 찾는 마찰이 생긴다. → **한 화면에서 목록 + 완성된 공유 링크 1클릭 복사** 가 필요.
+
+### Goal (고도화)
+**운영자는 `/admin` 에 로그인한 뒤, 발행된 견적 목록에서 원하는 견적의 공유 링크를 3초 안에 클립보드로 복사해 카톡·메일에 붙여넣을 수 있다. 동시에 이 화면은 인증 없이는 누구도 열 수 없어 전체 견적 URL 목록이 외부에 유출되지 않는다.**
+
+### How (고도화)
+1. `/admin/login` 에서 운영자가 환경변수에 저장된 비밀번호를 입력 → 서버가 검증 후 서명된 세션 쿠키 발급.
+2. `proxy.ts` 가 `/admin/*` 요청마다 세션 쿠키를 검사 → 없거나 위조면 `/admin/login` 으로 리다이렉트.
+3. 인증된 운영자에게 `/admin` 이 발행 견적 목록(제목·고객사·견적번호·발행일·상태)을 테이블로 렌더.
+4. 각 행의 **[링크 복사]** 버튼 → `${origin}/q/${slug}` 를 클립보드에 복사 + 토스트("링크를 복사했습니다").
+5. `/admin/*` 는 `noindex` (proxy 헤더 + robots.txt) 로 검색엔진에서 완전히 가린다.
+
+## A.2 보안 — 이 기능의 P0 (가장 중요)
+
+> **왜 인증이 필수인가** — MVP 의 보안 모델은 **"URL 자체가 비밀"** 이다(추측 불가 32자 slug). 관리자 목록 화면은 **모든 견적의 공유 링크를 한 곳에 모아 노출**한다. 따라서 이 페이지가 인증 없이 공개되면 **단 한 번의 접근으로 전체 견적 URL 이 통째로 유출** 되어 MVP 보안 모델 전체가 붕괴한다. → **`/admin/*` 은 반드시 인증(로그인) 게이트 뒤에 둔다. 인증은 이 고도화 기능의 P0 이며, 목록 UI 보다 먼저 성립해야 한다.**
+
+### 인증 방식 — 권장안 + 대안 (운영자 결정 필요)
+
+단일 운영자 MVP 성격(다중 사용자·역할 없음)에 맞춰 **신규 npm install 없이** Next.js 16 내장 기능만으로 구현 가능한 경량안을 권장한다.
+
+| 안 | 방식 | 장점 | 단점 | 신규 의존성 |
+|---|---|---|---|---|
+| **권장 — 환경변수 비밀번호 + 서명 세션 쿠키** | `/admin/login` POST 에서 입력 비번을 `ADMIN_PASSWORD`(env) 와 비교 → 일치 시 Web Crypto(HMAC-SHA256, `ADMIN_SESSION_SECRET`)로 서명한 토큰을 `httpOnly`+`secure`+`sameSite=lax` 쿠키로 발급. `proxy.ts` 가 `/admin/*` 마다 서명 검증. | 단일 운영자에 충분. 외부 라이브러리 0. 로그인 폼 UX 가 깔끔(카톡 인앱 등에서도 동작). 쿠키 만료·로그아웃 제어 가능. | 로그인 페이지·서명 유틸·세션 검증 코드를 직접 작성해야 함. | **없음** (Web Crypto 내장) |
+| 대안 1 — HTTP Basic Auth (proxy) | `proxy.ts` 에서 `/admin/*` 요청의 `Authorization: Basic` 헤더를 `ADMIN_USER`/`ADMIN_PASSWORD` 와 비교, 불일치 시 `401 + WWW-Authenticate`. | 코드량 최소(로그인 페이지 불필요). | 브라우저 기본 팝업 UI(투박·로그아웃 어려움). 비번이 매 요청 평문 전송(HTTPS 전제 필수). 모바일 인앱 브라우저 호환성 편차. | 없음 |
+| 대안 2 — Vercel 플랫폼 보호 | Vercel 프로젝트의 Password Protection / Deployment Protection 으로 `/admin` 경로 보호(또는 별도 프리뷰). | 코드 0. | Vercel 유료 플랜 필요할 수 있음. 경로 단위 세밀 제어가 코드보다 약함. Vercel 종속. | 없음(플랫폼 설정) |
+
+> **권장 = 환경변수 비밀번호 + 서명 세션 쿠키.** 로그인 UX·로그아웃·쿠키 만료 제어가 필요하고, shadcn `field`/`input`/`button` 으로 로그인 폼을 이미 만들 수 있으며, Web Crypto 가 Node/Edge 양쪽에서 동작하므로 신규 의존성이 없다.
+>
+> ⚠️ **운영자 결정 필요** — 위 3안 중 택1. (아래 A.9 "운영자 결정 필요 사항" 1번에 등록.)
+
+### 인증과 무관하게 항상 적용할 보안 규칙
+- `/admin/*` 응답에 `X-Robots-Tag: noindex, nofollow, noarchive` (proxy.ts matcher 확장) + `robots.txt` 에 `/admin` Disallow.
+- 비밀번호·세션 시크릿은 `NEXT_PUBLIC_` 금지(서버 전용 env). 비교는 타이밍 안전 비교 권장.
+- 로그인 실패 시 어떤 견적 정보도 응답에 포함하지 않는다(목록 페치는 인증 통과 후에만 실행).
+
+## A.3 기능 명세서 (고도화 — 본문 명세서에 추가)
+
+| 기능명 | 설명 | 우선순위 | 비고 |
+|---|---|---|---|
+| **관리자 인증 게이트** | `/admin/*` 를 로그인(서명 세션 쿠키) 뒤로 보호. 미인증 → `/admin/login` 리다이렉트 | **P0** (이 기능군의 최우선) | 신규 npm install 없음(Web Crypto). 방식 운영자 결정 필요 |
+| 관리자 로그인 페이지 | `/admin/login` — 비밀번호 입력 폼 → 서버 검증 → 세션 쿠키 발급 | P0 | shadcn `field`/`input`/`button` 재사용 |
+| 발행 견적 목록 | `/admin` — `상태=발행` 견적을 테이블로(제목·고객사·견적번호·발행일·상태) | P0 | 신규 페치 `queryPublishedQuotes()` |
+| 목록 페치 함수 | `lib/quotes.ts` 에 `queryPublishedQuotes()` 추가 — 목록용 필드만 정규화 | P0 | MVP 가정 "목록 함수 안 만든다" 변경 |
+| 공유 링크 복사 버튼 | 행별 [링크 복사] → `${origin}/q/${slug}` 클립보드 복사 + 토스트 | P0 | 클라이언트 컴포넌트. `navigator.clipboard` + sonner |
+| `/admin` noindex | proxy 헤더 + robots.txt 로 검색엔진 차단 | P0 | 보안 규칙 |
+| 행에서 견적 열람 이동 | 행의 [열람] → `/q/[slug]` 새 탭 열기 | P1 | 운영자가 발행 결과 미리보기 |
+| 로그아웃 | 세션 쿠키 삭제 → `/admin/login` 이동 | P1 | 쿠키 방식 채택 시 |
+| 다크모드 | next-themes 기반 라이트/다크/시스템 전환 | **구현됨** | 신규 개발 아님. A.6 참조(검증·문서화만) |
+| 목록 검색·정렬·필터 | 고객사/날짜 검색, 컬럼 정렬 | Future | 발행 건수 적은 동안 불필요 |
+| 목록 페이지네이션 | 견적 수 많아질 때 페이지 분할 | Future | MVP 규모(월 5~10건)에선 불필요 |
+| 다중 운영자·역할 | 사용자별 계정·권한 | Future | 단일 운영자 가정 유지 |
+
+## A.4 IA (고도화 — 본문 IA 에 추가)
+
+```
+/                        랜딩 (MVP 그대로)
+├─ /q/[slug]             견적서 열람 (MVP 그대로 · 클라이언트 공개)
+├─ /q/[slug]/pdf         PDF 생성 (MVP 그대로)
+├─ /api/revalidate       revalidate webhook (MVP 그대로)
+│
+├─ /admin/login          🆕 운영자 로그인 (공개. 비번 입력 폼)            ← 인증 게이트 진입점
+└─ /admin                🆕 발행 견적 목록 (🔒 인증 필수 · noindex)       ← 세션 쿠키 없으면 /admin/login 리다이렉트
+```
+
+> 〔본문 IA 주석 변경〕 본문 IA 의 "MVP에서는 운영자 전용 화면을 만들지 않는다" 는 v1.x 에서 **변경됨**. 위 `/admin/*` 두 라우트가 운영자 전용 화면이다. 단 이는 **목록 + 링크 복사** 화면이며, "통계 대시보드"(여전히 Future)와는 구분된다.
+>
+> **인증 게이트 위치**: `proxy.ts` 가 `/admin`(단, `/admin/login` 제외)에 대해 세션 쿠키를 검사한다. 현재 `proxy.ts` 의 matcher 는 `/q/:path*` 뿐이므로 **`/admin/:path*` 를 matcher 에 추가**해야 한다(noindex 헤더 + 인증 리다이렉트 둘 다 여기서 처리).
+
+## A.5 Wire-frame (고도화)
+
+**관리자 로그인 `/admin/login`**
+
+```
+┌────────────────────────────────────┐
+│            견적 관리자               │
+│  ┌──────────────────────────────┐  │
+│  │ 비밀번호: [ ************* ]    │  │
+│  │           [ 로그인 ]          │  │
+│  └──────────────────────────────┘  │
+│  (실패 시: "비밀번호가 올바르지     │
+│   않습니다." 인라인 에러)            │
+└────────────────────────────────────┘
+```
+
+**관리자 견적 목록 `/admin`** (인증 통과 후)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  발행 견적 목록 (총 7건)                          [테마전환] [로그아웃] │
+├──────────────┬────────────┬────────────┬──────────┬──────┬───────────┤
+│ 제목          │ 고객사      │ 견적번호    │ 발행일    │ 상태  │ 동작       │
+├──────────────┼────────────┼────────────┼──────────┼──────┼───────────┤
+│ ABC 로고 견적 │ ABC 주식회사│ Q-2026-0042│ 26-05-17 │ 발행  │ [열람][복사]│
+│ XYZ 앱 견적   │ XYZ Inc.   │ Q-2026-0041│ 26-05-15 │ 발행  │ [열람][복사]│
+│ …            │ …          │ …          │ …        │ …    │ …         │
+└──────────────┴────────────┴────────────┴──────────┴──────┴───────────┘
+   [복사] 클릭 → 토스트: "링크를 복사했습니다"  (클립보드: https://…/q/<slug>)
+```
+
+- 모바일에서는 행이 카드 형태로 분해(`제목 / 고객사 / 발행일 / [열람] [복사]`).
+- `[열람]` = `/q/[slug]` 새 탭, `[복사]` = 공유 URL 클립보드 복사.
+- 헤더의 [테마전환] 은 기존 `ThemeToggle`(이미 구현) 을 그대로 노출 → 관리자 화면에도 다크모드 일관 적용(A.6).
+
+## A.6 다크모드 — ⚠️ 이미 구현됨 (검증·문서화만)
+
+> **신규 개발 항목 아님.** 실측(2026-05-22, 코드 직접 확인):
+> - `components/common/ThemeProvider.tsx` — `next-themes` `ThemeProvider` 래퍼.
+> - `components/common/ThemeToggle.tsx` — 헤더 "테마 전환" 버튼(`aria-label="테마 전환"`, Sun/Moon 아이콘 토글, `resolvedTheme` 기반).
+> - `app/layout.tsx` — `<ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>`, `<html lang="ko" suppressHydrationWarning>`.
+> - `app/globals.css` — `.dark` 토큰(oklch) + `@custom-variant dark`.
+> - T2.6(MVP W2)에서 다크모드 시각 검증 완료.
+
+**고도화 범위는 다음 두 가지로 한정(과설계 금지):**
+1. **검증·문서화** — `defaultTheme="system"` 기본값 동작 확인(OS 설정 추종), 사용자 선호 persist 확인(next-themes 는 localStorage 키 `theme` 에 자동 저장 → 새 방문 시 복원). Playwright 로 라이트/다크/시스템 3상태 회귀 스냅샷.
+2. **선택적 폴리시 — 관리자 화면 일관 적용** — `/admin`·`/admin/login` 도 동일 토큰·`ThemeToggle` 을 사용해 라이트/다크가 깨지지 않게 한다. (신규 토큰·신규 토글 만들지 않음. 기존 자산 재사용.)
+
+## A.7 기획안 / 처리 프로세스 (고도화)
+
+**1. 목록 페치 — `queryPublishedQuotes()` (신규, `lib/quotes.ts`)**
+- MVP 의 `getQuoteBySlug` 와 동일한 v5 2단계 패턴(`resolveDataSourceId` 재사용) + `상태=발행` select 필터로 발행 견적 전체를 `start_cursor` 페이지네이션 조회.
+- ⚠️ **슬러그 formula 서버 필터 불가** 함정(본문·CLAUDE.md 기록)은 목록에도 적용 — 하지만 목록은 slug 로 **필터링하지 않고** 발행 견적 전체를 가져와 각 행의 slug 를 `getFormulaString` 으로 읽기만 하므로 문제 없음.
+- 반환 타입: 목록용 경량 타입(예: `QuoteListItem` = `{ slug, title, clientCompany, quoteNumber, issuedAt, status }`). **합계·항목(Items)·notes 는 페치하지 않는다**(목록에 불필요 + N+1 호출 방지).
+- 정렬: `발행일`(date) 내림차순(최신 우선). Notion `sorts` 또는 코드 정렬.
+- 정합성: 본문 규칙 1~3 동일 적용(필수 속성 누락 행은 `console.warn` 후 목록에는 표시하되 누락 필드는 "-"). slug 가 형식 위반인 행은 [복사] 비활성(잘못된 URL 복사 방지).
+
+**2. 인증 모델 (권장안 기준 — 환경변수 비번 + 서명 세션 쿠키)**
+- `lib/admin-auth.ts`(신규, `server-only`): `signSession()`/`verifySession()` — Web Crypto `crypto.subtle` HMAC-SHA256 으로 `{ iat, exp }` 페이로드를 서명. `ADMIN_SESSION_SECRET`(env) 사용.
+- `/admin/login` (Route Handler 또는 Server Action): 입력 비번 ⟷ `ADMIN_PASSWORD`(env) 타이밍 안전 비교 → 일치 시 `cookies().set("admin_session", token, { httpOnly:true, secure:true, sameSite:"lax", path:"/admin", maxAge:… })`.
+- `proxy.ts`: `/admin`(login 제외)에서 `cookies()` 로 세션 읽어 `verifySession()` → 실패 시 `NextResponse.redirect("/admin/login")`. 동시에 `/admin/*` 에 noindex 헤더.
+- ⚠️ **proxy 에서 검증은 "낙관적(optimistic) 게이트"** — Next.js 권장 패턴대로 proxy 는 1차 차단만 담당하고, 실제 데이터 페치(`/admin` 페이지의 `queryPublishedQuotes()`) 진입 전 **서버 컴포넌트에서도 세션을 재검증**한다(2중 안전망. proxy 우회·쿠키 조작 대비).
+
+**3. 링크 복사 흐름 (클라이언트 컴포넌트)**
+- `components/admin/copy-link-button.tsx`(신규, `"use client"`): props 로 `slug` 받음 → 클릭 시 `navigator.clipboard.writeText(`${window.location.origin}/q/${slug}`)` → 성공 `toast.success("링크를 복사했습니다")`, 실패 `toast.error(...)`(권한 거부·비보안 컨텍스트 대비). sonner `<Toaster>` 는 루트 레이아웃에 이미 있으므로 재선언 금지.
+- ⚠️ `navigator.clipboard` 는 보안 컨텍스트(HTTPS/localhost)에서만 동작 → 실패 시 fallback(텍스트 선택·수동 복사 안내) 토스트.
+- origin 은 클라이언트에서 `window.location.origin` 으로 조립(서버에서 `NEXT_PUBLIC_APP_URL` 주입도 가능 — 운영자 결정 A.9 3번).
+
+## A.8 DataTable (고도화)
+
+> ⚠️ **신규 Notion 속성·신규 필드 불필요.** 관리자 목록이 쓰는 모든 컬럼은 본문 `Quote` 타입에 **이미 존재**한다(실측: `types/index.ts`).
+
+| 데이터타입 | 한글명 | 영문명 | 출처 | 컬럼설명 |
+|---|---|---|---|---|
+| string | 견적 제목 | title | `Quote.title` (기존) | 목록 행 제목 |
+| string | 고객사명 | clientCompany | `Quote.clientCompany` (기존) | 목록 행 고객사 |
+| string | 견적번호 | quoteNumber | `Quote.quoteNumber` (기존) | 목록 행 견적번호 |
+| Date | 발행일 | issuedAt | `Quote.issuedAt` (기존) | 목록 정렬 키(내림차순) |
+| enum | 상태 | status | `Quote.status` (기존) | `발행`만 목록 노출 |
+| string (≥32자) | 슬러그 | slug | `Quote.slug` (기존) | `[복사]` → `${origin}/q/${slug}`, `[열람]` 링크 |
+
+**신규(코드/인프라 — Notion DB 아님)**
+
+| 데이터타입 | 한글명 | 영문명 | 컬럼설명 |
+|---|---|---|---|
+| TS interface | 목록 항목(경량) | QuoteListItem | `queryPublishedQuotes()` 반환 행. 위 6필드만(항목·합계·notes 제외) |
+| string (env) | 관리자 비밀번호 | ADMIN_PASSWORD | 서버 전용. 로그인 검증값. `NEXT_PUBLIC_` 금지 |
+| string (env) | 세션 서명 시크릿 | ADMIN_SESSION_SECRET | 서버 전용. HMAC 서명 키(32자+ 무작위) |
+| cookie | 관리자 세션 | admin_session | `httpOnly`+`secure`+`sameSite=lax` 서명 토큰. `verifySession()` 검증 |
+
+## A.9 작성 가정 / 운영자 결정 필요 사항 (고도화)
+
+1. **관리자 인증 방식 (최우선 결정)** — A.2 의 3안 중 택1. **권장: 환경변수 비번 + 서명 세션 쿠키**(신규 의존성 0, 로그인 UX·로그아웃 제어 가능). 대안: HTTP Basic Auth(코드 최소·UX 투박), Vercel 플랫폼 보호(코드 0·플랫폼 종속). → 인증 코드 구조가 이 선택에 따라 갈리므로 **개발 착수 전 확정 필요**.
+2. **세션 만료(maxAge)** — 권장안 채택 시 세션 쿠키 유효기간(예: 7일 / 30일 / "브라우저 닫으면 만료"). 단일 운영자 본인 기기 가정이면 길게 둬도 무방. 결정 필요.
+3. **공유 URL origin 조립 방식** — `[복사]` 가 만드는 URL 의 도메인을 클라이언트 `window.location.origin` 으로 잡을지(배포 도메인에서 열면 자동), `NEXT_PUBLIC_APP_URL` 로 고정할지. production 도메인(`notion-ai-blog-zeta.vercel.app` 또는 커스텀 도메인)이 확정되면 후자가 안전. 결정 필요.
+4. **목록 기본 노출 범위** — `상태=발행` 만 보일지, `초안`·`보관` 도 (상태 뱃지와 함께) 보일지. 본 PRD 는 "발행만" 가정(공유 가능한 견적 = 발행). 운영자가 초안 관리도 원하면 확장. 결정 필요.
+
+## A.10 정합성 검증 체크리스트 (고도화)
+
+- [x] 고도화 Goal(인증된 운영자가 목록에서 링크 3초 복사 + URL 비유출)과 P0 기능(인증 게이트·목록·링크 복사·noindex)이 1:1 연결되는가
+- [x] 보안 최우선 원칙(목록은 인증 뒤에서만, URL 유출 방지)이 P0 로 명시되고 인증이 목록보다 선행하도록 기술됐는가
+- [x] 신규 npm install 가정이 없는가 (인증=Web Crypto 내장, 복사=navigator.clipboard, UI=기존 shadcn/sonner/next-themes)
+- [x] DataTable 의 목록 필드가 모두 기존 `Quote` 타입에 존재함을 실측 확인했는가 (신규 Notion 속성 0)
+- [x] 다크모드를 "신규 개발" 이 아니라 "이미 구현됨 + 검증/문서화" 로 처리했는가
+- [x] MVP 의 Future 목록(대시보드 통계 포함)을 건드리지 않고, v1.x 관리자 목록이 "통계 대시보드" 와 구분됨을 명시했는가
+- [x] MVP 가정 변경 2건(운영자 화면 도입 / 목록 페치 함수 신규)이 본문에 각주로 표시되고 부록에 상세 기록됐는가
+
+## A.11 자가 검증 (고도화 — 작성자 자체 점검)
+
+**풀스펙 검열 — 고도화 P0 재검토**
+- 관리자 인증 게이트 / 로그인 페이지 / 발행 목록 / 목록 페치 함수 / 링크 복사 / `/admin` noindex → 6개 모두 "빠지면 고도화 Goal(인증된 목록에서 안전하게 링크 복사) 검증 불가" 통과.
+- "행에서 견적 열람 이동", "로그아웃" 은 없어도 핵심 Goal(복사) 검증이 가능 → **P1 로 강등**.
+- "검색·정렬·필터", "페이지네이션", "다중 운영자" 는 발행 건수 적은 단일 운영자 규모에서 불필요 → **Future**.
+- 다크모드는 이미 구현됨 → 신규 P0 아님(검증·문서화만).
+
+**DataTable ↔ 기능 명세서 교차 확인 (고도화)**
+- 목록 명세서의 표시 필드(제목·고객사·견적번호·발행일·상태·slug) → 전부 본문 `Quote`/`QuoteListItem` 에 존재(실측). 신규 Notion 속성 0건.
+- 인증 명세서의 객체(ADMIN_PASSWORD·ADMIN_SESSION_SECRET·admin_session 쿠키) → A.8 신규 표에 모두 등재. 미사용 항목 없음.
+- `queryPublishedQuotes()` 가 반환하는 `QuoteListItem` 의 모든 필드가 목록 UI(테이블 컬럼 + 복사/열람 동작)에서 1회 이상 사용됨.
+
+## A.12 환경변수 추가 (고도화 — `.env.example` 에 반영 필요)
+
+> 권장 인증안(환경변수 비번 + 서명 세션 쿠키) 채택 시 추가. (대안 채택 시 일부 불필요.)
+
+```bash
+# ===========================
+# 관리자 화면 (/admin) 인증 — v1.x 고도화
+# - ADMIN_PASSWORD: /admin/login 검증 비밀번호. NEXT_PUBLIC_ 금지(서버 전용).
+# - ADMIN_SESSION_SECRET: 세션 쿠키 HMAC 서명 키. 32자 이상 강한 무작위.
+#     생성: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# ===========================
+ADMIN_PASSWORD=change-me-strong-password
+ADMIN_SESSION_SECRET=change-me-to-a-long-random-string
+```

@@ -38,6 +38,15 @@ metadata:
 - `sidebarItems`가 `dashboard/layout.tsx`에 정적 배열로 선언 — 인증 상태에 따른 분기 없음
 - Footer 링크들이 `<a>` 태그 사용 — Next.js `<Link>` 미사용 (외부 링크가 아닌데도)
 
+**W3 관리자 인증 패턴 (2026-05-22 관찰):**
+- R13 경계: `lib/admin-session.ts`(순수 Web Crypto)와 `lib/admin-auth.ts`(server-only, Node API)의 역할 분리가 정착됨. proxy.ts는 admin-session.ts만 import — Edge 런타임 안전성 확보
+- `verifyPassword` 길이 불일치 조기 반환: 비번 길이 누출이 단일 운영자 MVP 범위에서 허용 트레이드오프로 결정됨 (보안 체크리스트 항목으로 재확인 필요)
+- `secure: true` 쿠키 플래그가 로컬 http dev에서 쿠키가 전송되지 않는 known issue. `process.env.NODE_ENV !== "production"`으로 분기하는 패턴이 적용되지 않음 — 반복 지적 가능
+- proxy.ts 관리자 게이트: `pathname.startsWith("/admin")` 체크가 `/adminxyz` 같은 다른 경로도 포함하는 잠재적 범위 오판. matcher는 `/admin/:path*`로 제한되어 있어 실제 영향은 없음 (matcher가 1차 필터)
+- `robots.txt`: `/admin`이 `Disallow: /admin`으로 선언됨 — trailing slash 없어 `/admin/` 하위가 모두 차단되는지 크롤러 구현에 따라 다름. `/admin/`로 수정 권장
+- `normalizeQuoteListItem`의 필수 속성 누락 경고: `slug`가 null인 경우도 "목록 속성 누락: slug"로 warn — slug 형식 위반 warn이 이미 별도 발행되어 중복 경고 가능성
+- 로그아웃 GET 방식: 단일 운영자 MVP에서 의도적 트레이드오프로 문서화됨
+
 **W2 PDF/Revalidate 패턴 (2026-05-21 관찰):**
 - `finally { await browser?.close() }` 패턴으로 puppeteer 리소스 누수 방지 — 올바른 패턴
 - `export const runtime` 생략이 `cacheComponents:true`와의 충돌 회피를 위한 의도적 선택 — 이유를 주석으로 명시하는 규칙이 정착됨

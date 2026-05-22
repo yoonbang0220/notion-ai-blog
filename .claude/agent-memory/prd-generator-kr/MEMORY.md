@@ -3,3 +3,5 @@
 - [Notion data model pattern](feedback_notion_data_model_pattern.md) — DB 1개 + page body 블록이 디폴트. child DB 분리는 거의 항상 Future.
 - [URL security MVP minimum](heuristic_url_security_mvp.md) — 비로그인 공유 링크는 추측 불가 slug(32자+) + noindex + server-only 토큰이 P0 최소선. 비밀번호·만료차단은 Future.
 - [PDF generation decision](heuristic_pdf_generation_decision.md) — 한글 결재용 PDF는 @sparticuz/chromium이 디폴트. window.print()는 다운그레이드 옵션, @react-pdf/renderer는 표·폰트 코스트 큼.
+- [Admin list breaks URL secrecy](heuristic_admin_list_breaks_url_secrecy.md) — "URL이 비밀"인 공유 서비스에 관리자 목록 추가 시 인증 게이트가 목록보다 선행 P0. 경량안=env비번+HMAC쿠키.
+- [PRD enhancement: append not overwrite](heuristic_prd_enhancement_append_not_overwrite.md) — MVP PRD 고도화는 덮어쓰기 금지. 본문 보존+부록 분리+〔변경〕각주. 구현된 기능은 "이미 구현됨"으로 격하.

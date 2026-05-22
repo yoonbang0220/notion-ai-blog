@@ -53,8 +53,8 @@ npx shadcn@latest add <component> # shadcn/ui 컴포넌트 추가
 - 일정: 파트타임 2주 — W1 / W2. 태스크 ID 컨벤션 `T1.x` / `T2.x`.
 - **W0 (초기화) 완료** — 블로그 도메인 자산 제거, 견적서 도메인 기반 정돈.
 - **W1 완료** — ✅ T1.1~T1.8 (Notion 시드 → `getQuoteBySlug`/`getQuoteItems`/`calculateTotals` → 도메인 타입 → `/q/[slug]` 셸+Suspense+noindex → `<QuoteView>` 반응형 → `isQuoteExpired` 만료 판정 → 랜딩 `/` 정식화) + code-reviewer-kr 리뷰·quick fix 반영. `npm run test:quotes` 10/10, `npm run build`(`/` Static + `/q/[slug]` Partial Prerender) 통과. T1.8 은 quote-ui-designer 검증(2026-05-21): build `/` `○ Static` 유지 + Playwright 데스크톱·모바일·다크 3종 통과.
-- **W2 거의 완료** — ✅ T2.1(puppeteer-core+@sparticuz/chromium·pdf-spike) · T2.2(Pretendard 폰트) · T2.3(`/q/[slug]/pdf` PDF 라우트) · T2.4(`/api/revalidate` Bearer webhook) · T2.5(robots.txt) · T2.6(Playwright E2E 7종 PASS, `docs/PHASE2_E2E_REPORT.md`) 완료 + code-reviewer-kr quick fix(C1·C2·M4·S3) 반영. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9. ✅ **T2.7 배포 전 하드닝**(`app/error.tsx` 전역 에러 경계·`lib/rate-limit.ts` 레이트리밋[PDF 10·revalidate 30/분, 429]·Pretendard 폰트 서브셋 2MB→452KB) + code-reviewer-kr quick fix(C2·M4·m1). **잔여**: ⬜ **T2.8**(Vercel 배포, ops; 이연 E2E E(Draft→404)·I(revalidate) production 실측 포함) = MVP launch. 추가 성능·보안헤더·분산 리밋(KV)·VRT 는 측정 후 백로그.
-- 크리티컬 패스: `lib/quotes.ts → app/q/[slug]/page.tsx → app/q/[slug]/pdf/route.ts → app/api/revalidate/route.ts → robots/noindex → Playwright E2E`. (배포 전 하드닝(T2.7)까지 완료. 남은 건 Vercel 배포(T2.8) = MVP launch.)
+- **W2 거의 완료** — ✅ T2.1(puppeteer-core+@sparticuz/chromium·pdf-spike) · T2.2(Pretendard 폰트) · T2.3(`/q/[slug]/pdf` PDF 라우트) · T2.4(`/api/revalidate` Bearer webhook) · T2.5(robots.txt) · T2.6(Playwright E2E 7종 PASS, `docs/PHASE2_E2E_REPORT.md`) 완료 + code-reviewer-kr quick fix(C1·C2·M4·S3) 반영. tsc·lint·build·test:quotes 10/10·pdf-route 5/5·revalidate 9/9. ✅ **T2.7 배포 전 하드닝**(`app/error.tsx` 전역 에러 경계·`lib/rate-limit.ts` 레이트리밋[PDF 10·revalidate 30/분, 429]·Pretendard 폰트 서브셋 2MB→452KB) + code-reviewer-kr quick fix(C2·M4·m1). 🔄 **T2.8 진행 중** — Vercel GitHub 연동 배포 `notion-ai-blog-zeta.vercel.app`. ✅ 랜딩·견적·환경변수(4개)·noindex·**PDF production 동작**(서버리스 Chromium 3중 수정: `serverExternalPackages`→`outputFileTracingIncludes`(bin)→`launchBrowser` ETXTBSY 재시도; 동시 5/5 200·웜 4.3s). **잔여(✅ 전)**: ⬜ 콜드스타트 15.3s(R4 판단) · ⬜ 이연 E2E E(Draft→404)·I(revalidate 통합) · ⬜ revalidate prod E2E · ⬜ Lighthouse · (선택)도메인. 추가 성능·보안헤더·분산 리밋(KV)·VRT 는 측정 후 백로그.
+- 크리티컬 패스: `lib/quotes.ts → app/q/[slug]/page.tsx → app/q/[slug]/pdf/route.ts → app/api/revalidate/route.ts → robots/noindex → Playwright E2E → Vercel 배포`. (배포·PDF 까지 동작. 남은 건 T2.8 의 production E2E(E·I·revalidate)·Lighthouse·콜드스타트 판단 = MVP launch 확정.)
 - 작업 착수 전 `docs/ROADMAP.md` 해당 태스크 ID 섹션을 우선 확인할 것 (DoD·테스트 계획·의존성·리스크 포함).
 
 ## 도메인 모델 (Notion DB)
@@ -251,7 +251,7 @@ RootLayout (ThemeProvider · Header · main · Footer · Toaster)
 ## 프로젝트 컨텍스트 문서
 
 - `docs/QUOTE_VIEWER_PRD.md` — **단일 출처(SSOT)**. Overview / Persona / Use Cases / 기능 명세서(P0·Future) / IA / DataTable / 기술 결정 / 정합성 규칙. 새 기능 추가·범위 결정 전 반드시 참고.
-- `docs/ROADMAP.md` — W1~W2 태스크 실행 계획(`T<주차>.<번호>` ID). 각 태스크의 산출물·DoD·**테스트 계획**·의존성·리스크. 작업 시작 전 해당 태스크 ID 섹션 우선 확인. Phase 3(Future)는 PRD Future 항목의 임팩트-노력 매트릭스.
+- `docs/ROADMAP.md` — W1~W3 태스크 실행 계획(`T<주차>.<번호>` ID). 각 태스크의 산출물·DoD·**테스트 계획**·의존성·리스크. 작업 시작 전 해당 태스크 ID 섹션 우선 확인. **Phase 3(W3) = v1.x 고도화**(운영자 관리 화면 — T3.1 인증→T3.2 목록 페치→T3.3 `/admin` 목록→T3.4 링크 복사→T3.5 다크모드 검증, PRD 부록 A 기반, 2026-05-22 추가). **Phase 4(Future)** = PRD Future 항목 임팩트-노력 매트릭스.
 - `docs/MVP PRD 양식.md` — PRD 작성 양식 (다음 견적서 외 PRD 작성 시 참고).
 - `docs/HOOKS_PLANNING.md` — Slack 알림 시스템 설계·이슈·로드맵 기획서. **Slack/Hook 관련 변경 시 반드시 참조**.
 - `docs/archive/` — 블로그 MVP 시절 자산 보존(2026-05-17 이전). `NOTION_BLOG_PRD.md`, `ROADMAP.md`(블로그 버전), `BUG_REPORT.md`, `shrimp-rules.md`, `shrimp-backup/`.
