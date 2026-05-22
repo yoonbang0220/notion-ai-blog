@@ -86,6 +86,34 @@ export interface QuoteItem {
 }
 
 /**
+ * 관리자 목록(`/admin`, Phase 3 / T3.2)용 **경량** 견적 행.
+ *
+ * `queryPublishedQuotes()`(lib/quotes.ts) 가 발행 견적을 이 형태로 정규화한다.
+ * ⚠️ 항목(`QuoteItem[]`)·합계(`QuoteTotals`)·`notes` 는 **포함하지 않는다** —
+ *   목록 화면엔 불필요하고, 견적마다 Items DB 를 조회하면 N+1 호출이 된다(회귀 가드).
+ *
+ * 정합성(T3.2):
+ *   - 필수 속성(`title`/`clientCompany`/`quoteNumber`/`issuedAt`) 누락 행은 `console.warn`
+ *     후 해당 필드를 `null` 로 둔다(UI 가 "-" 표시). 목록에서 제외하지는 않는다.
+ *   - `slug` 형식 위반(`SLUG_PATTERN` 불통과) 행은 `slug=null` — UI 가 [복사] 버튼을
+ *     비활성화해 잘못된 URL 복사를 막는다.
+ */
+export interface QuoteListItem {
+  /** Notion `슬러그`(formula). 형식 위반 시 null(UI [복사] 비활성). */
+  slug: string | null
+  /** Notion `제목`(title). 내부 식별용. 누락 시 null. */
+  title: string | null
+  /** Notion `고객사`(rich_text). 누락 시 null. */
+  clientCompany: string | null
+  /** Notion `견적번호`(rich_text). 예: `Q-2026-0001`. 누락 시 null. */
+  quoteNumber: string | null
+  /** Notion `발행일`(date). ISO 8601. 목록 정렬 키(내림차순). 누락 시 null(맨 뒤). */
+  issuedAt: string | null
+  /** Notion `상태`(select). 목록은 `Published` 만이지만 뱃지 표시용으로 보존. */
+  status: QuoteStatus
+}
+
+/**
  * 견적 합계. `QuoteItem[]` + `taxRate` 에서 코드로 계산한 파생값(규칙 6).
  * 세 값 모두 정수 원 단위(반올림). Notion 속성으로 저장하지 않는다.
  */

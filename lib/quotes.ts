@@ -3,7 +3,13 @@ import "server-only"
 import { Client, isFullDatabase, isFullPage } from "@notionhq/client"
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints"
 
-import type { Quote, QuoteItem, QuoteStatus, QuoteTotals } from "@/types"
+import type {
+  Quote,
+  QuoteItem,
+  QuoteListItem,
+  QuoteStatus,
+  QuoteTotals,
+} from "@/types"
 
 /**
  * 견적(Invoice)·항목(Items) Notion DB 페치 레이어. **서버 전용**(`server-only` 가드).
@@ -141,6 +147,93 @@ export async function getQuoteBySlug(slug: string): Promise<Quote | null> {
   if (matches.length === 0) return null // 규칙 3 → 404
   if (matches.length >= 2) throw new Error(`Duplicate slug: ${slug}`) // 규칙 1
   return normalizeQuote(matches[0])
+}
+
+/**
+ * **발행된** 견적 전체를 관리자 목록용 경량 형태({@link QuoteListItem})로 조회한다(T3.2).
+ *
+ * - 필터: `상태=발행`(`STATUS_PUBLISHED_KO`) 만. `getQuoteBySlug` 와 달리 slug 로 필터하지
+ *   않으므로 **formula 필터 불가 함정과 무관**하다(각 행 slug 는 `getFormulaString` 으로 읽기만).
+ * - 정렬: `발행일` 내림차순(최신 우선). Notion `sorts` 로 1차 정렬 후, 발행일이 없는 행은
+ *   Notion 이 어디에 놓든 상관없이 **코드에서 맨 뒤로** 재정렬한다(ROADMAP R4 — null 순서 고정).
+ * - `start_cursor` 페이지네이션으로 발행 견적 전수 조회(100건 초과 경계 안전).
+ * - ⚠️ 항목(Items)·합계·notes 는 **페치하지 않는다**(목록 경량 — `getQuoteItems`/
+ *   `calculateTotals` 미호출, N+1 방지).
+ *
+ * 정합성(T3.2):
+ *   - 필수 속성(title/clientCompany/quoteNumber/issuedAt) 누락 행 → `console.warn`(행 식별자
+ *     포함) + 해당 필드 `null`(목록엔 포함, UI 가 "-" 표시).
+ *   - slug 형식 위반(`SLUG_PATTERN` 불통과) 행 → `slug=null`(UI [복사] 비활성, 잘못된 URL 복사 방지).
+ *
+ * @returns 발행일 내림차순 {@link QuoteListItem} 배열. 발행 0건이면 빈 배열(throw 없음).
+ */
+export async function queryPublishedQuotes(): Promise<QuoteListItem[]> {
+  const dataSourceId = await resolveDataSourceId()
+  const pages: PageObjectResponse[] = []
+  let startCursor: string | undefined = undefined
+
+  // 무한 루프 방지 상한(100건/page × 50page = 5000행). MVP 규모에선 닿지 않는다.
+  const MAX_PAGES = 50
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const res = await notion.dataSources.query({
+      data_source_id: dataSourceId,
+      filter: { property: PROP.status, select: { equals: STATUS_PUBLISHED_KO } },
+      sorts: [{ property: PROP.issuedAt, direction: "descending" }],
+      page_size: 100,
+      start_cursor: startCursor,
+    })
+    for (const page of res.results) {
+      if (isFullPage(page)) pages.push(page)
+    }
+    if (!res.has_more || !res.next_cursor) break
+    startCursor = res.next_cursor
+  }
+
+  const items = pages.map((page) => normalizeQuoteListItem(page))
+
+  // 발행일 null 은 맨 뒤로(R4). Notion sorts 가 null 을 어디에 놓든 코드에서 안정화한다.
+  // null 이 아닌 행끼리는 발행일 내림차순(최신 우선) 유지.
+  return items.sort((a, b) => {
+    if (a.issuedAt === b.issuedAt) return 0
+    if (a.issuedAt === null) return 1
+    if (b.issuedAt === null) return -1
+    return a.issuedAt < b.issuedAt ? 1 : -1
+  })
+}
+
+/** Notion 페이지 응답 → {@link QuoteListItem}(경량). 필수 누락 warn + slug 형식 위반 시 null. */
+function normalizeQuoteListItem(page: PageObjectResponse): QuoteListItem {
+  const p = page.properties
+  const title = getTitleText(p[PROP.title])
+  const rawSlug = getFormulaString(p[PROP.slug])
+  const clientCompany = getRichText(p[PROP.clientCompany])
+  const quoteNumber = getRichText(p[PROP.quoteNumber])
+  const issuedAt = getDate(p[PROP.issuedAt])
+  const rawStatus = getSelect(p[PROP.status])
+  const status: QuoteStatus = (rawStatus && STATUS[rawStatus]) || "Published"
+
+  // slug 형식 위반/누락 → null(UI [복사] 비활성, 잘못된 URL 복사 방지). 행 식별자로 title 폴백.
+  // slug 는 여기서 단일 경고로 처리하고 아래 required 루프에서는 제외한다(이중 경고 방지, M2 리뷰 반영).
+  const rowLabel = title || page.id
+  const slug = rawSlug && SLUG_PATTERN.test(rawSlug) ? rawSlug : null
+  if (!rawSlug) {
+    console.warn(`[quote ${rowLabel}] slug 없음 → 목록에서 복사 비활성`)
+  } else if (!slug) {
+    console.warn(`[quote ${rowLabel}] slug 형식 위반 → 목록에서 복사 비활성: ${rawSlug}`)
+  }
+
+  // 필수 속성 누락 경고(목록엔 포함, 누락 필드는 null → UI "-"). slug 는 위에서 별도 처리.
+  const required: Record<string, unknown> = {
+    title,
+    clientCompany,
+    quoteNumber,
+    issuedAt,
+  }
+  for (const [key, value] of Object.entries(required)) {
+    if (!value) console.warn(`[quote ${rowLabel}] 목록 속성 누락: ${key}`)
+  }
+
+  return { slug, title, clientCompany, quoteNumber, issuedAt, status }
 }
 
 /** Notion 페이지 응답 → {@link Quote}. 필수 속성 누락 시 warn(규칙 2, throw 금지). */

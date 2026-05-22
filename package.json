@@ -12,7 +12,9 @@
     "test:pdf-spike": "node --import tsx scripts/test/pdf-spike.ts",
     "test:pdf-route": "node --env-file=.env.local --import tsx scripts/test/pdf-route.ts",
     "test:revalidate": "node --env-file=.env.local --import tsx scripts/test/revalidate.ts",
-    "test:rate-limit": "node --env-file=.env.local --import tsx scripts/test/rate-limit.ts"
+    "test:rate-limit": "node --env-file=.env.local --import tsx scripts/test/rate-limit.ts",
+    "test:admin-auth": "node --env-file=.env.local --import tsx scripts/test/admin-auth.ts",
+    "test:admin-quotes": "node --env-file=.env.local --import tsx scripts/test/admin-quotes.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
